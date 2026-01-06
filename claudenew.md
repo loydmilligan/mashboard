@@ -23,24 +23,6 @@
 
 ---
 
-## Development Commands
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Run with Docker
-docker-compose up -d
-```
-
----
-
 ## Tech Stack
 
 | Layer | Technology |
@@ -455,25 +437,6 @@ These are configured by the user in Settings, but defaults/examples:
 
 ---
 
-## Workflow
-
-### Before Starting Work
-1. Check `TASKS.md` for current task assignment
-2. Review `AGENTS.md` for multi-agent workflow expectations
-
-### Commit Format
-```
-type(scope): description
-
-- detail 1
-- detail 2
-
-Task: [TASK-ID]
-```
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-
----
-
 ## Important Notes
 
 ### iframe Embedding
@@ -523,13 +486,6 @@ npx shadcn@latest add <component>
 # Type checking
 npx tsc --noEmit
 ```
-
----
-
-## Current Status
-
-- Phase: 0 - Setup
-- Stack: Node.js 18+, Docker deployment
 
 ---
 
