@@ -1,0 +1,241 @@
+# Docker Compose with reverse proxy for iframe cookie support
+# ============================================================
+#
+# Runs Mashb0ard + Dumbpad + Termix + ByteStash + SearXNG + Vikunja + NoteMark together under the same origin.
+# This solves third-party cookie issues when embedding services in iframes.
+#
+# USAGE:
+#   1. Copy .env.example to .env and configure
+#   2. docker compose -f docker/docker-compose.proxy.yml up -d
+#   3. In Mashb0ard Settings (API Keys tab), set:
+#      - Dumbpad URL: /dumbpad
+#      - Termix Iframe URL: /termix
+#      - Termix API URL: /api/termix
+#      - ByteStash URL: /bytestash
+#      - SearXNG URL: /searxng
+#      - Vikunja URL: /vikunja
+#      - NoteMark URL: /notemark, API: /api/notemark
+#
+# ACCESS:
+#   - Mashb0ard:  http://localhost:3000
+#   - Dumbpad:    http://localhost:3000/dumbpad/
+#   - Termix:     http://localhost:3000/termix/
+#   - ByteStash:  http://localhost:3000/bytestash/
+#   - SearXNG:    http://localhost:3000/searxng/
+#   - Vikunja:    http://localhost:3000/vikunja/
+#   - NoteMark:   http://localhost:3000/notemark/ (direct: http://localhost:8001)
+
+services:
+  # ==========================================================================
+  # DATABASE
+  # ==========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: mashb0ard-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-mashboard}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-mashboard-secret-change-me}
+      - POSTGRES_DB=${POSTGRES_DB:-mashboard}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - mashb0ard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mashboard}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # MASHBOARD SERVICES
+  # ==========================================================================
+  mashb0ard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.proxy
+    container_name: mashb0ard
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:80"
+    environment:
+      # Internal URLs to services (Docker service names)
+      - DUMBPAD_URL=dumbpad:3000
+      - TERMIX_URL=termix:8080
+      - BYTESTASH_URL=bytestash:5000
+      - SEARXNG_URL=searxng:8080
+      - VIKUNJA_URL=vikunja:3456
+      - NOTEMARK_URL=notemark:8080
+      - MASHBOARD_API_URL=mashboard-api:3001
+    networks:
+      - mashb0ard-net
+    depends_on:
+      - dumbpad
+      - termix
+      - bytestash
+      - searxng
+      - vikunja
+      - notemark
+      - mashboard-api
+
+  # Mashboard API - Backend for habits, pomodoro tracking, etc.
+  mashboard-api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    container_name: mashboard-api
+    restart: unless-stopped
+    environment:
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mashboard}
+      - DB_USER=${POSTGRES_USER:-mashboard}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mashboard-secret-change-me}
+    networks:
+      - mashb0ard-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ==========================================================================
+  # TASK MANAGEMENT
+  # ==========================================================================
+  vikunja:
+    image: vikunja/vikunja:latest
+    container_name: vikunja
+    restart: unless-stopped
+    ports:
+      - "3456:3456"
+    environment:
+      - VIKUNJA_SERVICE_PUBLICURL=${VIKUNJA_PUBLIC_URL:-http://localhost:3456}/
+      - VIKUNJA_SERVICE_FRONTENDURL=${VIKUNJA_PUBLIC_URL:-http://localhost:3456}/
+      - VIKUNJA_DATABASE_TYPE=postgres
+      - VIKUNJA_DATABASE_HOST=postgres
+      - VIKUNJA_DATABASE_DATABASE=${VIKUNJA_DB:-vikunja}
+      - VIKUNJA_DATABASE_USER=${POSTGRES_USER:-mashboard}
+      - VIKUNJA_DATABASE_PASSWORD=${POSTGRES_PASSWORD:-mashboard-secret-change-me}
+      - VIKUNJA_SERVICE_JWTSECRET=${VIKUNJA_JWT_SECRET:-vikunja-jwt-secret-change-me}
+      - VIKUNJA_SERVICE_ENABLEREGISTRATION=${VIKUNJA_ENABLE_REGISTRATION:-true}
+      # CORS - Enable for all origins (comma-separated origins don't work as env vars)
+      - VIKUNJA_CORS_ENABLE=true
+      # Disable features we don't need for MVP
+      - VIKUNJA_MAILER_ENABLED=false
+    volumes:
+      - vikunja_files:/app/vikunja/files
+      - ./vikunja-config.yml:/app/vikunja/config.yml:ro
+    networks:
+      - mashb0ard-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ==========================================================================
+  # EMBEDDED SERVICES
+  # ==========================================================================
+
+  # Dumbpad - Notes service
+  dumbpad:
+    image: dumbwareio/dumbpad:latest
+    container_name: dumbpad
+    restart: unless-stopped
+    environment:
+      # BASE_URL must match how users access it through the proxy
+      - BASE_URL=${EXTERNAL_URL:-http://localhost:3000}/dumbpad
+      - DUMBPAD_PIN=${DUMBPAD_PIN:-}
+      # Trust the nginx proxy
+      - TRUST_PROXY=true
+      - TRUSTED_PROXY_IPS=172.16.0.0/12,10.0.0.0/8
+      # Optional settings
+      - SITE_TITLE=${DUMBPAD_TITLE:-Notes}
+    volumes:
+      - dumbpad_data:/app/data
+    networks:
+      - mashb0ard-net
+
+  # Termix - SSH Terminal service
+  # Exposed on port 8080 for direct access (proxy has issues with local auth)
+  termix:
+    image: ghcr.io/lukegus/termix:latest
+    container_name: termix
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SALT=${TERMIX_SALT:-mashb0ard-termix-salt-change-me}
+      - PORT=8080
+    volumes:
+      - termix_data:/app/data
+    networks:
+      - mashb0ard-net
+
+  # ByteStash - Code snippets manager
+  bytestash:
+    image: ghcr.io/jordan-dalby/bytestash:latest
+    container_name: bytestash
+    restart: unless-stopped
+    environment:
+      - BASE_PATH=/bytestash
+      - JWT_SECRET=${BYTESTASH_JWT_SECRET:-mashb0ard-bytestash-jwt-change-me}
+      - TOKEN_EXPIRY=${BYTESTASH_TOKEN_EXPIRY:-24h}
+      - ALLOW_NEW_ACCOUNTS=${BYTESTASH_ALLOW_NEW_ACCOUNTS:-true}
+    volumes:
+      - bytestash_data:/data/snippets
+    networks:
+      - mashb0ard-net
+
+  # SearXNG - Privacy-respecting metasearch engine
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    environment:
+      - SEARXNG_BASE_URL=${EXTERNAL_URL:-http://localhost:3000}/searxng/
+      - INSTANCE_NAME=${SEARXNG_INSTANCE_NAME:-Mashb0ard Search}
+    volumes:
+      - searxng_data:/etc/searxng
+    networks:
+      - mashb0ard-net
+
+  # Dozzle - Docker log viewer
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOZZLE_BASE=/dozzle
+      - DOZZLE_NO_ANALYTICS=true
+    networks:
+      - mashb0ard-net
+
+  # NoteMark - Markdown notes service (all-in-one image with SQLite)
+  notemark:
+    image: ghcr.io/enchant97/note-mark-aio:0.18.0
+    container_name: notemark
+    restart: unless-stopped
+    ports:
+      - "8001:8080"
+    environment:
+      # Security - MUST change JWT_SECRET in production (must be base64 encoded)
+      - JWT_SECRET=${NOTEMARK_JWT_SECRET:-bm90ZW1hcmstand0LXNlY3JldC1jaGFuZ2UtbWU=}
+      - CORS_ORIGINS=${NOTEMARK_CORS_ORIGINS:-http://localhost:3000,http://localhost:8001}
+    volumes:
+      - notemark_data:/data
+    networks:
+      - mashb0ard-net
+
+networks:
+  mashb0ard-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  vikunja_files:
+  dumbpad_data:
+  termix_data:
+  bytestash_data:
+  searxng_data:
+  notemark_data:

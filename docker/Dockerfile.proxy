@@ -1,0 +1,41 @@
+# Multi-stage build for Mashb0ard with reverse proxy support
+# This Dockerfile includes nginx configured to proxy to Dumbpad/Termix
+
+# Stage 1: Build the React app
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN npm run build
+
+# Stage 2: Serve with nginx + reverse proxy
+FROM nginx:alpine
+
+# Install envsubst for environment variable substitution
+RUN apk add --no-cache gettext
+
+# Copy nginx config template
+COPY docker/nginx.proxy.template.conf /etc/nginx/templates/default.conf.template
+
+# Copy built assets
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Fix permissions for all static files
+RUN chmod -R 644 /usr/share/nginx/html/* && \
+    chmod 755 /usr/share/nginx/html /usr/share/nginx/html/assets
+
+# Expose port
+EXPOSE 80
+
+# Use nginx's default entrypoint which processes templates
+# Environment variables DUMBPAD_URL and TERMIX_URL will be substituted

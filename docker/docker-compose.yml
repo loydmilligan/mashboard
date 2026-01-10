@@ -1,0 +1,15 @@
+services:
+  mashb0ard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: mashb0ard
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    # Uncomment below for Traefik reverse proxy
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.mashb0ard.rule=Host(`mashb0ard.yourdomain.com`)"
+    #   - "traefik.http.routers.mashb0ard.tls=true"
+    #   - "traefik.http.routers.mashb0ard.tls.certresolver=letsencrypt"

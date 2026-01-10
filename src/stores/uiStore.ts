@@ -1,0 +1,87 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { STORAGE_KEYS } from '@/lib/constants'
+
+interface UIState {
+  // Sidebar states
+  aiSidebarOpen: boolean
+  notesSidebarOpen: boolean
+
+  // Terminal panel
+  terminalPanelOpen: boolean
+  terminalPanelHeight: number
+
+  // Logs panel
+  logsPanelOpen: boolean
+  logsPanelHeight: number
+
+  // Pomodoro
+  pomodoroExpanded: boolean
+
+  // Overlays
+  commandPaletteOpen: boolean
+  settingsOpen: boolean
+  snippetsPopoverOpen: boolean
+
+  // Actions
+  toggleAiSidebar: () => void
+  toggleNotesSidebar: () => void
+  setNotesSidebarOpen: (open: boolean) => void
+  toggleTerminalPanel: () => void
+  setTerminalPanelHeight: (height: number) => void
+  toggleLogsPanel: () => void
+  setLogsPanelHeight: (height: number) => void
+  setPomodoroExpanded: (expanded: boolean) => void
+  togglePomodoroExpanded: () => void
+  setCommandPaletteOpen: (open: boolean) => void
+  setSettingsOpen: (open: boolean) => void
+  setSnippetsPopoverOpen: (open: boolean) => void
+  closeAllOverlays: () => void
+}
+
+export const useUIStore = create<UIState>()(
+  persist(
+    (set) => ({
+      // Initial states
+      aiSidebarOpen: false,
+      notesSidebarOpen: false,
+      terminalPanelOpen: false,
+      terminalPanelHeight: 300,
+      logsPanelOpen: false,
+      logsPanelHeight: Math.floor(window.innerHeight * 0.67), // 2/3 of screen
+      pomodoroExpanded: false,
+      commandPaletteOpen: false,
+      settingsOpen: false,
+      snippetsPopoverOpen: false,
+
+      // Actions
+      toggleAiSidebar: () => set((state) => ({ aiSidebarOpen: !state.aiSidebarOpen })),
+      toggleNotesSidebar: () => set((state) => ({ notesSidebarOpen: !state.notesSidebarOpen })),
+      setNotesSidebarOpen: (open) => set({ notesSidebarOpen: open }),
+      toggleTerminalPanel: () => set((state) => ({ terminalPanelOpen: !state.terminalPanelOpen })),
+      setTerminalPanelHeight: (height) => set({ terminalPanelHeight: height }),
+      toggleLogsPanel: () => set((state) => ({ logsPanelOpen: !state.logsPanelOpen })),
+      setLogsPanelHeight: (height) => set({ logsPanelHeight: height }),
+      setPomodoroExpanded: (expanded) => set({ pomodoroExpanded: expanded }),
+      togglePomodoroExpanded: () => set((state) => ({ pomodoroExpanded: !state.pomodoroExpanded })),
+      setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+      setSettingsOpen: (open) => set({ settingsOpen: open }),
+      setSnippetsPopoverOpen: (open) => set({ snippetsPopoverOpen: open }),
+      closeAllOverlays: () =>
+        set({
+          commandPaletteOpen: false,
+          settingsOpen: false,
+          snippetsPopoverOpen: false,
+          pomodoroExpanded: false,
+        }),
+    }),
+    {
+      name: STORAGE_KEYS.UI,
+      partialize: (state) => ({
+        // Only persist certain values, not open states
+        terminalPanelHeight: state.terminalPanelHeight,
+        logsPanelHeight: state.logsPanelHeight,
+      }),
+    }
+  )
+)

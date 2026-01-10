@@ -1,0 +1,8 @@
+cors:
+  enable: true
+  origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+    - "http://192.168.5.255:3000"
+    - "http://192.168.4.217:3000"
+  maxage: 0
