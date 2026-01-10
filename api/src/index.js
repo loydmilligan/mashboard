@@ -132,6 +132,22 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- AI Models table
+      CREATE TABLE IF NOT EXISTS ai_models (
+        id SERIAL PRIMARY KEY,
+        model_id VARCHAR(255) NOT NULL UNIQUE,
+        nickname VARCHAR(100) NOT NULL,
+        description TEXT,
+        tags TEXT[] DEFAULT '{}',
+        favorite BOOLEAN DEFAULT false,
+        model_type VARCHAR(50) DEFAULT 'general',
+        supports_deep_reasoning BOOLEAN DEFAULT false,
+        supports_streaming BOOLEAN DEFAULT true,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Create indexes
       CREATE INDEX IF NOT EXISTS idx_habit_completions_date
         ON habit_completions(completed_at);
@@ -143,7 +159,39 @@ async function initDatabase() {
         ON task_resources(vikunja_task_id);
       CREATE INDEX IF NOT EXISTS idx_uploaded_files_key
         ON uploaded_files(storage_key);
+      CREATE INDEX IF NOT EXISTS idx_ai_models_model_id
+        ON ai_models(model_id);
+      CREATE INDEX IF NOT EXISTS idx_ai_models_favorite
+        ON ai_models(favorite);
+      CREATE INDEX IF NOT EXISTS idx_ai_models_type
+        ON ai_models(model_type);
     `)
+
+    // Seed default AI models if table is empty
+    const modelCount = await client.query('SELECT COUNT(*) FROM ai_models')
+    if (parseInt(modelCount.rows[0].count) === 0) {
+      const defaultModels = [
+        { model_id: 'anthropic/claude-sonnet-4', nickname: 'Claude Sonnet 4', model_type: 'general', supports_deep_reasoning: true, supports_streaming: true },
+        { model_id: 'anthropic/claude-3.5-sonnet', nickname: 'Claude 3.5 Sonnet', model_type: 'general', supports_streaming: true },
+        { model_id: 'openai/gpt-4o', nickname: 'GPT-4o', model_type: 'general', supports_streaming: true },
+        { model_id: 'openai/o1-preview', nickname: 'o1 Preview', model_type: 'reasoning', supports_deep_reasoning: true, supports_streaming: false },
+        { model_id: 'google/gemini-2.0-flash-exp', nickname: 'Gemini 2.0 Flash', model_type: 'general', supports_streaming: true },
+        { model_id: 'anthropic/claude-3-haiku', nickname: 'Claude 3 Haiku', model_type: 'general', supports_streaming: true, tags: ['fast', 'cheap'] },
+        { model_id: 'deepseek/deepseek-chat', nickname: 'DeepSeek Chat', model_type: 'coding', supports_streaming: true },
+      ]
+
+      for (let i = 0; i < defaultModels.length; i++) {
+        const m = defaultModels[i]
+        await client.query(
+          `INSERT INTO ai_models (model_id, nickname, model_type, supports_deep_reasoning, supports_streaming, tags, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (model_id) DO NOTHING`,
+          [m.model_id, m.nickname, m.model_type || 'general', m.supports_deep_reasoning || false, m.supports_streaming !== false, m.tags || [], i]
+        )
+      }
+      console.log('Seeded default AI models')
+    }
+
     console.log('Database schema initialized')
   } finally {
     client.release()
@@ -801,6 +849,196 @@ app.delete('/files/:storageKey', async (req, res) => {
   } catch (error) {
     console.error('Error deleting file:', error)
     res.status(500).json({ error: 'Failed to delete file' })
+  }
+})
+
+// ============================================================================
+// AI MODELS API
+// ============================================================================
+
+// Get all AI models (sorted by favorite first, then sort_order)
+app.get('/models', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ai_models
+       ORDER BY favorite DESC, sort_order ASC, created_at ASC`
+    )
+    res.json(result.rows)
+  } catch (error) {
+    console.error('Error fetching AI models:', error)
+    res.status(500).json({ error: 'Failed to fetch AI models' })
+  }
+})
+
+// Get a single AI model by ID or model_id
+app.get('/models/:identifier', async (req, res) => {
+  try {
+    const { identifier } = req.params
+    // Check if identifier is numeric (id) or string (model_id)
+    const isNumeric = /^\d+$/.test(identifier)
+    const query = isNumeric
+      ? 'SELECT * FROM ai_models WHERE id = $1'
+      : 'SELECT * FROM ai_models WHERE model_id = $1'
+
+    const result = await pool.query(query, [isNumeric ? parseInt(identifier) : identifier])
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'AI model not found' })
+    }
+    res.json(result.rows[0])
+  } catch (error) {
+    console.error('Error fetching AI model:', error)
+    res.status(500).json({ error: 'Failed to fetch AI model' })
+  }
+})
+
+// Create a new AI model
+app.post('/models', async (req, res) => {
+  try {
+    const { model_id, nickname, description, tags, favorite, model_type, supports_deep_reasoning, supports_streaming, sort_order } = req.body
+
+    if (!model_id || !nickname) {
+      return res.status(400).json({ error: 'model_id and nickname are required' })
+    }
+
+    const result = await pool.query(
+      `INSERT INTO ai_models (model_id, nickname, description, tags, favorite, model_type, supports_deep_reasoning, supports_streaming, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        model_id,
+        nickname,
+        description || null,
+        tags || [],
+        favorite || false,
+        model_type || 'general',
+        supports_deep_reasoning || false,
+        supports_streaming !== false,
+        sort_order || 0
+      ]
+    )
+    res.status(201).json(result.rows[0])
+  } catch (error) {
+    if (error.code === '23505') { // unique_violation
+      return res.status(409).json({ error: 'Model with this model_id already exists' })
+    }
+    console.error('Error creating AI model:', error)
+    res.status(500).json({ error: 'Failed to create AI model' })
+  }
+})
+
+// Update an AI model
+app.put('/models/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { model_id, nickname, description, tags, favorite, model_type, supports_deep_reasoning, supports_streaming, sort_order } = req.body
+
+    const result = await pool.query(
+      `UPDATE ai_models
+       SET model_id = COALESCE($1, model_id),
+           nickname = COALESCE($2, nickname),
+           description = COALESCE($3, description),
+           tags = COALESCE($4, tags),
+           favorite = COALESCE($5, favorite),
+           model_type = COALESCE($6, model_type),
+           supports_deep_reasoning = COALESCE($7, supports_deep_reasoning),
+           supports_streaming = COALESCE($8, supports_streaming),
+           sort_order = COALESCE($9, sort_order),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $10
+       RETURNING *`,
+      [model_id, nickname, description, tags, favorite, model_type, supports_deep_reasoning, supports_streaming, sort_order, id]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'AI model not found' })
+    }
+    res.json(result.rows[0])
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Model with this model_id already exists' })
+    }
+    console.error('Error updating AI model:', error)
+    res.status(500).json({ error: 'Failed to update AI model' })
+  }
+})
+
+// Delete an AI model
+app.delete('/models/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await pool.query('DELETE FROM ai_models WHERE id = $1 RETURNING *', [id])
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'AI model not found' })
+    }
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting AI model:', error)
+    res.status(500).json({ error: 'Failed to delete AI model' })
+  }
+})
+
+// Reorder AI models
+app.put('/models/reorder', async (req, res) => {
+  try {
+    const { modelIds } = req.body // Array of model IDs in new order
+
+    if (!Array.isArray(modelIds)) {
+      return res.status(400).json({ error: 'modelIds must be an array' })
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+
+      for (let i = 0; i < modelIds.length; i++) {
+        await client.query(
+          'UPDATE ai_models SET sort_order = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [i, modelIds[i]]
+        )
+      }
+
+      await client.query('COMMIT')
+
+      const result = await pool.query(
+        'SELECT * FROM ai_models ORDER BY favorite DESC, sort_order ASC'
+      )
+      res.json(result.rows)
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+  } catch (error) {
+    console.error('Error reordering AI models:', error)
+    res.status(500).json({ error: 'Failed to reorder AI models' })
+  }
+})
+
+// Toggle favorite status
+app.put('/models/:id/favorite', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { favorite } = req.body
+
+    const result = await pool.query(
+      `UPDATE ai_models
+       SET favorite = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
+      [favorite, id]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'AI model not found' })
+    }
+    res.json(result.rows[0])
+  } catch (error) {
+    console.error('Error toggling favorite:', error)
+    res.status(500).json({ error: 'Failed to toggle favorite' })
   }
 })
 
