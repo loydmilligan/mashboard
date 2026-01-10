@@ -29,6 +29,7 @@ interface WorkflowState {
   addLink: (groupId: string, link: Omit<QuickLink, 'id'>) => void
   updateLink: (groupId: string, linkId: string, updates: Partial<Omit<QuickLink, 'id'>>) => void
   deleteLink: (groupId: string, linkId: string) => void
+  moveLink: (fromGroupId: string, linkId: string, toGroupId: string) => void
 
   // Reset
   resetToDefaults: () => void
@@ -153,6 +154,28 @@ export const useWorkflowStore = create<WorkflowState>()(
               : g
           ),
         }))
+      },
+
+      moveLink: (fromGroupId, linkId, toGroupId) => {
+        if (fromGroupId === toGroupId) return
+
+        set((state) => {
+          const fromGroup = state.linkGroups.find((g) => g.id === fromGroupId)
+          const link = fromGroup?.links.find((l) => l.id === linkId)
+          if (!link) return state
+
+          return {
+            linkGroups: state.linkGroups.map((g) => {
+              if (g.id === fromGroupId) {
+                return { ...g, links: g.links.filter((l) => l.id !== linkId) }
+              }
+              if (g.id === toGroupId) {
+                return { ...g, links: [...g.links, link] }
+              }
+              return g
+            }),
+          }
+        })
       },
 
       resetToDefaults: () => {

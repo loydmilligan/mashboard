@@ -12,6 +12,10 @@ import {
   Music,
   Table,
   Youtube,
+  Pin,
+  Copy,
+  XCircle,
+  ArrowRightToLine,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +24,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+  ContextMenuCheckboxItem,
+} from '@/components/ui/context-menu'
 import { useContentStore } from '@/stores/contentStore'
 import type { AppType, ContentTab } from '@/stores/contentStore'
 import { cn } from '@/lib/utils'
@@ -44,41 +57,85 @@ const APP_CONFIG: Record<AppType, { icon: React.ReactNode; label: string }> = {
 
 interface TabProps {
   tab: ContentTab
+  tabIndex: number
+  totalTabs: number
   isActive: boolean
   onSelect: () => void
   onClose: () => void
 }
 
-function Tab({ tab, isActive, onSelect, onClose }: TabProps) {
+function Tab({ tab, tabIndex, totalTabs, isActive, onSelect, onClose }: TabProps) {
+  const { closeOtherTabs, closeTabsToRight, duplicateTab, togglePinTab } = useContentStore()
   const config = APP_CONFIG[tab.appType]
 
   return (
-    <div
-      className={cn(
-        'group flex h-9 items-center gap-2 border-r border-border px-3',
-        'cursor-pointer transition-colors',
-        isActive ? 'bg-background' : 'bg-muted/50 hover:bg-muted'
-      )}
-      onClick={onSelect}
-    >
-      {config?.icon}
-      <span className="max-w-[120px] truncate text-sm">{tab.title}</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className={cn(
-          'ml-1 h-5 w-5 p-0',
-          'opacity-0 transition-opacity group-hover:opacity-100',
-          isActive && 'opacity-50 hover:opacity-100'
-        )}
-        onClick={(e) => {
-          e.stopPropagation()
-          onClose()
-        }}
-      >
-        <X className="h-3 w-3" />
-      </Button>
-    </div>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          className={cn(
+            'group flex h-9 items-center gap-2 border-r border-border px-3',
+            'cursor-pointer transition-colors',
+            isActive ? 'bg-background' : 'bg-muted/50 hover:bg-muted',
+            tab.isPinned && 'bg-primary/5'
+          )}
+          onClick={onSelect}
+        >
+          {tab.isPinned && <Pin className="h-3 w-3 text-primary" />}
+          {config?.icon}
+          <span className="max-w-[120px] truncate text-sm">{tab.title}</span>
+          {!tab.isPinned && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'ml-1 h-5 w-5 p-0',
+                'opacity-0 transition-opacity group-hover:opacity-100',
+                isActive && 'opacity-50 hover:opacity-100'
+              )}
+              onClick={(e) => {
+                e.stopPropagation()
+                onClose()
+              }}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-48">
+        <ContextMenuItem onClick={onClose}>
+          <X className="mr-2 h-4 w-4" />
+          Close
+          <ContextMenuShortcut>⌘W</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => closeOtherTabs(tab.id)}
+          disabled={totalTabs <= 1}
+        >
+          <XCircle className="mr-2 h-4 w-4" />
+          Close Other Tabs
+        </ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => closeTabsToRight(tab.id)}
+          disabled={tabIndex >= totalTabs - 1}
+        >
+          <ArrowRightToLine className="mr-2 h-4 w-4" />
+          Close Tabs to Right
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => duplicateTab(tab.id)}>
+          <Copy className="mr-2 h-4 w-4" />
+          Duplicate Tab
+        </ContextMenuItem>
+        <ContextMenuCheckboxItem
+          checked={tab.isPinned}
+          onCheckedChange={() => togglePinTab(tab.id)}
+        >
+          <Pin className="mr-2 h-4 w-4" />
+          Pin Tab
+        </ContextMenuCheckboxItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
@@ -226,10 +283,12 @@ export function ContentArea() {
     <div className="flex h-full flex-col bg-background">
       {/* Tab Bar */}
       <div className="flex h-9 shrink-0 items-center border-b border-border bg-muted/30">
-        {openTabs.map((tab) => (
+        {openTabs.map((tab, index) => (
           <Tab
             key={tab.id}
             tab={tab}
+            tabIndex={index}
+            totalTabs={openTabs.length}
             isActive={tab.id === activeTabId}
             onSelect={() => setActiveTab(tab.id)}
             onClose={() => closeTab(tab.id)}

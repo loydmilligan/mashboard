@@ -1,5 +1,15 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Plus, ExternalLink, Pencil, Trash2, X } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  ExternalLink,
+  Pencil,
+  Trash2,
+  X,
+  Copy,
+  FolderOutput,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -10,6 +20,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import type { QuickLink, LinkGroup } from '@/types/workflow'
 
@@ -74,19 +94,29 @@ function LinkEditor({ open, onOpenChange, link, onSave }: LinkEditorProps) {
 
 interface LinkGroupSectionProps {
   group: LinkGroup
+  allGroups: LinkGroup[]
   onToggle: () => void
   onAddLink: () => void
   onEditLink: (link: QuickLink) => void
   onDeleteLink: (linkId: string) => void
+  onMoveLink: (linkId: string, toGroupId: string) => void
 }
 
 function LinkGroupSection({
   group,
+  allGroups,
   onToggle,
   onAddLink,
   onEditLink,
   onDeleteLink,
+  onMoveLink,
 }: LinkGroupSectionProps) {
+  const otherGroups = allGroups.filter((g) => g.id !== group.id)
+
+  const handleCopyUrl = (url: string) => {
+    navigator.clipboard.writeText(url)
+  }
+
   return (
     <div className="rounded-lg border border-border bg-card">
       {/* Header */}
@@ -113,44 +143,62 @@ function LinkGroupSection({
           ) : (
             <ul className="space-y-1">
               {group.links.map((link) => (
-                <li
-                  key={link.id}
-                  className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted"
-                >
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-1 items-center gap-2 text-sm hover:text-primary"
-                  >
-                    <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                    {link.name}
-                  </a>
-                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        onEditLink(link)
-                      }}
+                <ContextMenu key={link.id}>
+                  <ContextMenuTrigger asChild>
+                    <li className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted cursor-default">
+                      <a
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-1 items-center gap-2 text-sm hover:text-primary"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                        {link.name}
+                      </a>
+                    </li>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-48">
+                    <ContextMenuItem onClick={() => onEditLink(link)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => window.open(link.url, '_blank')}>
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Open in New Tab
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => handleCopyUrl(link.url)}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy URL
+                    </ContextMenuItem>
+                    {otherGroups.length > 0 && (
+                      <ContextMenuSub>
+                        <ContextMenuSubTrigger>
+                          <FolderOutput className="mr-2 h-4 w-4" />
+                          Move to...
+                        </ContextMenuSubTrigger>
+                        <ContextMenuSubContent className="w-40">
+                          {otherGroups.map((g) => (
+                            <ContextMenuItem
+                              key={g.id}
+                              onClick={() => onMoveLink(link.id, g.id)}
+                            >
+                              {g.name}
+                            </ContextMenuItem>
+                          ))}
+                        </ContextMenuSubContent>
+                      </ContextMenuSub>
+                    )}
+                    <ContextMenuSeparator />
+                    <ContextMenuItem
+                      onClick={() => onDeleteLink(link.id)}
+                      className="text-destructive focus:text-destructive"
                     >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-destructive hover:text-destructive"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        onDeleteLink(link.id)
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </li>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               ))}
             </ul>
           )}
@@ -170,7 +218,7 @@ function LinkGroupSection({
 }
 
 export function QuickLinksPanel() {
-  const { linkGroups, toggleGroupCollapsed, addLink, updateLink, deleteLink, addLinkGroup } =
+  const { linkGroups, toggleGroupCollapsed, addLink, updateLink, deleteLink, addLinkGroup, moveLink } =
     useWorkflowStore()
 
   const [editorOpen, setEditorOpen] = useState(false)
@@ -258,10 +306,12 @@ export function QuickLinksPanel() {
             <LinkGroupSection
               key={group.id}
               group={group}
+              allGroups={linkGroups}
               onToggle={() => toggleGroupCollapsed(group.id)}
               onAddLink={() => handleAddLink(group.id)}
               onEditLink={(link) => handleEditLink(group.id, link)}
               onDeleteLink={(linkId) => handleDeleteLink(group.id, linkId)}
+              onMoveLink={(linkId, toGroupId) => moveLink(group.id, linkId, toGroupId)}
             />
           ))}
         </div>

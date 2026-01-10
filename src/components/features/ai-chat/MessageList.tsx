@@ -1,13 +1,13 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Copy, Check, User, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { TextSelectionContextMenu } from '@/components/shared/TextSelectionContextMenu'
 import { cn } from '@/lib/utils'
 import type { Message } from '@/types/chat'
-import { useState } from 'react'
 
 interface MessageListProps {
   messages: Message[]
@@ -177,10 +177,11 @@ export function MessageList({ messages, streamingContent, isStreaming, streaming
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
-      ))}
+    <TextSelectionContextMenu>
+      <div className="flex-1 overflow-y-auto">
+        {messages.map((message) => (
+          <MessageBubble key={message.id} message={message} />
+        ))}
 
       {/* Streaming message */}
       {isStreaming && streamingContent && (
@@ -234,7 +235,8 @@ export function MessageList({ messages, streamingContent, isStreaming, streaming
         </div>
       )}
 
-      <div ref={bottomRef} />
-    </div>
+        <div ref={bottomRef} />
+      </div>
+    </TextSelectionContextMenu>
   )
 }

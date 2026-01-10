@@ -1,7 +1,14 @@
-import { Terminal, Code2, Zap, Plus, Search } from 'lucide-react'
+import { Terminal, Code2, Zap, Plus, Search, Settings, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import { useContentStore } from '@/stores/contentStore'
 import type { AppType } from '@/stores/contentStore'
+import { useUIStore } from '@/stores/uiStore'
 import { WorkflowLauncher } from '@/components/features/workflows/WorkflowLauncher'
 import { cn } from '@/lib/utils'
 
@@ -35,6 +42,7 @@ const tools: Tool[] = [
 
 export function ToolsList() {
   const { openTab, openTabs, setActiveTab } = useContentStore()
+  const { setSettingsOpen } = useUIStore()
 
   const handleToolClick = (tool: Tool) => {
     // Check if app is already open
@@ -51,28 +59,49 @@ export function ToolsList() {
     })
   }
 
+  const handleOpenInNewTab = (tool: Tool) => {
+    // Always open a new tab, even if one exists
+    openTab({
+      appType: tool.id as AppType,
+      title: tool.name,
+    })
+  }
+
   return (
     <div className="space-y-1">
       {tools.map((tool) => {
         const isOpen = openTabs.some((t) => t.appType === tool.id)
 
         return (
-          <Button
-            key={tool.id}
-            variant="ghost"
-            size="sm"
-            className={cn(
-              'w-full justify-start gap-2',
-              isOpen && 'bg-muted'
-            )}
-            onClick={() => handleToolClick(tool)}
-          >
-            {tool.icon}
-            <span className="flex-1 text-left">{tool.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {isOpen ? 'Open' : ''}
-            </span>
-          </Button>
+          <ContextMenu key={tool.id}>
+            <ContextMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'w-full justify-start gap-2',
+                  isOpen && 'bg-muted'
+                )}
+                onClick={() => handleToolClick(tool)}
+              >
+                {tool.icon}
+                <span className="flex-1 text-left">{tool.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {isOpen ? 'Open' : ''}
+                </span>
+              </Button>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="w-48">
+              <ContextMenuItem onClick={() => handleOpenInNewTab(tool)}>
+                <ExternalLink className="mr-2 h-4 w-4" />
+                {isOpen ? 'Open Another Tab' : 'Open in New Tab'}
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => setSettingsOpen(true)}>
+                <Settings className="mr-2 h-4 w-4" />
+                Configure Settings
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         )
       })}
 

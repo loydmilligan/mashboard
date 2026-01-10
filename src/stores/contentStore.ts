@@ -92,6 +92,8 @@ export interface ContentTab {
   // Optional: link to task resource for tracking
   taskResourceId?: number
   vikunjaTaskId?: string
+  // Pin status for tab management
+  isPinned?: boolean
 }
 
 interface ContentState {
@@ -107,6 +109,11 @@ interface ContentState {
   closeAllTabs: () => void
   closeTabsByTask: (vikunjaTaskId: string) => void
   findTabByResourceId: (taskResourceId: number) => ContentTab | undefined
+  // Context menu actions
+  closeOtherTabs: (tabId: string) => void
+  closeTabsToRight: (tabId: string) => void
+  duplicateTab: (tabId: string) => string | null
+  togglePinTab: (tabId: string) => void
 }
 
 function generateId(): string {
@@ -196,6 +203,77 @@ export const useContentStore = create<ContentState>()(
 
       findTabByResourceId: (taskResourceId) => {
         return get().openTabs.find((t) => t.taskResourceId === taskResourceId)
+      },
+
+      closeOtherTabs: (tabId) => {
+        const state = get()
+        const tabToKeep = state.openTabs.find((t) => t.id === tabId)
+        if (!tabToKeep) return
+
+        // Keep pinned tabs and the specified tab
+        const newTabs = state.openTabs.filter((t) => t.id === tabId || t.isPinned)
+
+        set({
+          openTabs: newTabs,
+          activeTabId: tabId,
+        })
+      },
+
+      closeTabsToRight: (tabId) => {
+        const state = get()
+        const tabIndex = state.openTabs.findIndex((t) => t.id === tabId)
+        if (tabIndex === -1) return
+
+        // Keep tabs up to and including this one, plus any pinned tabs to the right
+        const newTabs = state.openTabs.filter((t, index) => index <= tabIndex || t.isPinned)
+
+        let newActiveId = state.activeTabId
+        // If active tab was closed, set to the clicked tab
+        if (state.activeTabId && !newTabs.find((t) => t.id === state.activeTabId)) {
+          newActiveId = tabId
+        }
+
+        set({ openTabs: newTabs, activeTabId: newActiveId })
+      },
+
+      duplicateTab: (tabId) => {
+        const state = get()
+        const tabToDuplicate = state.openTabs.find((t) => t.id === tabId)
+        if (!tabToDuplicate) return null
+
+        const newId = generateId()
+        const duplicatedTab: ContentTab = {
+          ...tabToDuplicate,
+          id: newId,
+          title: `${tabToDuplicate.title} (copy)`,
+          isPinned: false, // Duplicated tabs are not pinned
+        }
+
+        // Insert after the original tab
+        const tabIndex = state.openTabs.findIndex((t) => t.id === tabId)
+        const newTabs = [...state.openTabs]
+        newTabs.splice(tabIndex + 1, 0, duplicatedTab)
+
+        set({
+          openTabs: newTabs,
+          activeTabId: newId,
+        })
+
+        return newId
+      },
+
+      togglePinTab: (tabId) => {
+        set((state) => {
+          const newTabs = state.openTabs.map((t) =>
+            t.id === tabId ? { ...t, isPinned: !t.isPinned } : t
+          )
+
+          // Sort tabs: pinned first, then unpinned
+          const pinned = newTabs.filter((t) => t.isPinned)
+          const unpinned = newTabs.filter((t) => !t.isPinned)
+
+          return { openTabs: [...pinned, ...unpinned] }
+        })
       },
     }),
     {
