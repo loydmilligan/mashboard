@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import {
   Lightbulb,
   BookOpen,
@@ -13,6 +15,7 @@ import {
   Clock,
   RefreshCw,
   X,
+  Columns,
 } from 'lucide-react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Button } from '@/components/ui/button'
@@ -39,7 +42,102 @@ declare global {
   }
 }
 
-type ViewMode = 'edit' | 'preview'
+type ViewMode = 'edit' | 'preview' | 'split'
+
+// Markdown preview component with syntax highlighting
+interface MarkdownPreviewProps {
+  content: string
+  className?: string
+}
+
+function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
+  return (
+    <div className={cn('prose prose-sm prose-invert max-w-none', className)}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '')
+            const isInline = !match && !className
+            return isInline ? (
+              <code className="rounded bg-muted px-1.5 py-0.5 text-sm" {...props}>
+                {children}
+              </code>
+            ) : (
+              <SyntaxHighlighter
+                style={oneDark}
+                language={match?.[1] || 'text'}
+                PreTag="div"
+                className="rounded-md text-sm !my-2"
+                customStyle={{ margin: 0, fontSize: '0.875rem' }}
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            )
+          },
+          // Better table styling
+          table({ children }) {
+            return (
+              <div className="overflow-x-auto my-2">
+                <table className="min-w-full border-collapse border border-border">
+                  {children}
+                </table>
+              </div>
+            )
+          },
+          th({ children }) {
+            return (
+              <th className="border border-border bg-muted px-3 py-2 text-left font-semibold">
+                {children}
+              </th>
+            )
+          },
+          td({ children }) {
+            return <td className="border border-border px-3 py-2">{children}</td>
+          },
+          // Better blockquote
+          blockquote({ children }) {
+            return (
+              <blockquote className="border-l-4 border-primary/50 pl-4 italic text-muted-foreground">
+                {children}
+              </blockquote>
+            )
+          },
+          // Better links
+          a({ href, children }) {
+            return (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline underline-offset-2 hover:text-primary/80"
+              >
+                {children}
+              </a>
+            )
+          },
+          // Checkbox support for task lists
+          input({ type, checked, ...props }) {
+            if (type === 'checkbox') {
+              return (
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  readOnly
+                  className="mr-2 h-4 w-4 rounded border-border"
+                  {...props}
+                />
+              )
+            }
+            return <input type={type} {...props} />
+          },
+        }}
+      >
+        {content || '*No content*'}
+      </ReactMarkdown>
+    </div>
+  )
+}
 
 export function NotesSidebar() {
   const { notesSidebarOpen, toggleNotesSidebar, setNotesSidebarOpen } = useUIStore()
@@ -248,22 +346,43 @@ export function NotesSidebar() {
               )}
             </div>
             <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setViewMode(viewMode === 'edit' ? 'preview' : 'edit')}
-                title={viewMode === 'edit' ? 'Preview' : 'Edit'}
-              >
-                {viewMode === 'edit' ? <Eye className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
-              </Button>
+              {/* View mode buttons */}
+              <div className="flex items-center rounded-md border border-border">
+                <Button
+                  variant={viewMode === 'edit' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-6 w-6 rounded-r-none border-0"
+                  onClick={() => setViewMode('edit')}
+                  title="Edit only"
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={viewMode === 'split' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-6 w-6 rounded-none border-0"
+                  onClick={() => setViewMode('split')}
+                  title="Split view"
+                >
+                  <Columns className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={viewMode === 'preview' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-6 w-6 rounded-l-none border-0"
+                  onClick={() => setViewMode('preview')}
+                  title="Preview only"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+              </div>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
                 onClick={handleSave}
                 disabled={!hasChanges || isSaving}
-                title="Save"
+                title="Save (Ctrl+S)"
               >
                 <Save className={cn('h-4 w-4', hasChanges && 'text-amber-500')} />
               </Button>
@@ -299,9 +418,24 @@ export function NotesSidebar() {
                 placeholder="Start writing..."
                 className="h-full w-full resize-none rounded-none border-0 p-3 font-mono text-sm focus-visible:ring-0"
               />
+            ) : viewMode === 'preview' ? (
+              <div className="h-full overflow-y-auto p-3">
+                <MarkdownPreview content={content} />
+              </div>
             ) : (
-              <div className="h-full overflow-y-auto p-3 prose prose-sm prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '*No content*'}</ReactMarkdown>
+              /* Split view - editor on top, preview on bottom */
+              <div className="flex h-full flex-col">
+                <div className="h-1/2 border-b border-border">
+                  <Textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Start writing..."
+                    className="h-full w-full resize-none rounded-none border-0 p-3 font-mono text-sm focus-visible:ring-0"
+                  />
+                </div>
+                <div className="h-1/2 overflow-y-auto p-3">
+                  <MarkdownPreview content={content} />
+                </div>
               </div>
             )
           ) : (
@@ -386,9 +520,12 @@ export function NotesSidebar() {
         </div>
 
         {/* Keyboard shortcut hint */}
-        {selectedNoteId && viewMode === 'edit' && (
-          <div className="border-t px-3 py-1.5 text-xs text-muted-foreground">
-            <kbd className="rounded bg-muted px-1">Ctrl+S</kbd> to save
+        {selectedNoteId && (viewMode === 'edit' || viewMode === 'split') && (
+          <div className="border-t px-3 py-1.5 text-xs text-muted-foreground flex items-center justify-between">
+            <span><kbd className="rounded bg-muted px-1">Ctrl+S</kbd> to save</span>
+            {viewMode === 'split' && (
+              <span className="text-muted-foreground/60">Live preview</span>
+            )}
           </div>
         )}
       </div>
