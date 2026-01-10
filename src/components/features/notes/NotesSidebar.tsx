@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import {
@@ -16,6 +17,10 @@ import {
   RefreshCw,
   X,
   Columns,
+  Info,
+  AlertTriangle,
+  AlertCircle,
+  CheckCircle,
 } from 'lucide-react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Button } from '@/components/ui/button'
@@ -50,17 +55,74 @@ interface MarkdownPreviewProps {
   className?: string
 }
 
+// Callout icons mapping
+const calloutIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  note: Info,
+  info: Info,
+  tip: Lightbulb,
+  warning: AlertTriangle,
+  caution: AlertTriangle,
+  danger: AlertCircle,
+  error: AlertCircle,
+  success: CheckCircle,
+}
+
+const calloutStyles: Record<string, string> = {
+  note: 'border-blue-500/50 bg-blue-500/10',
+  info: 'border-blue-500/50 bg-blue-500/10',
+  tip: 'border-green-500/50 bg-green-500/10',
+  warning: 'border-yellow-500/50 bg-yellow-500/10',
+  caution: 'border-yellow-500/50 bg-yellow-500/10',
+  danger: 'border-red-500/50 bg-red-500/10',
+  error: 'border-red-500/50 bg-red-500/10',
+  success: 'border-green-500/50 bg-green-500/10',
+}
+
 function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
   return (
     <div className={cn('prose prose-sm prose-invert max-w-none', className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
+          // Headers with proper styling
+          h1({ children }) {
+            return <h1 className="text-2xl font-bold mt-6 mb-4 pb-2 border-b border-border">{children}</h1>
+          },
+          h2({ children }) {
+            return <h2 className="text-xl font-bold mt-5 mb-3 pb-1 border-b border-border/50">{children}</h2>
+          },
+          h3({ children }) {
+            return <h3 className="text-lg font-semibold mt-4 mb-2">{children}</h3>
+          },
+          h4({ children }) {
+            return <h4 className="text-base font-semibold mt-3 mb-2">{children}</h4>
+          },
+          h5({ children }) {
+            return <h5 className="text-sm font-semibold mt-2 mb-1">{children}</h5>
+          },
+          h6({ children }) {
+            return <h6 className="text-sm font-medium mt-2 mb-1 text-muted-foreground">{children}</h6>
+          },
+          // Paragraphs
+          p({ children }) {
+            return <p className="my-2 leading-relaxed">{children}</p>
+          },
+          // Lists with proper bullets
+          ul({ children }) {
+            return <ul className="my-2 ml-4 list-disc space-y-1">{children}</ul>
+          },
+          ol({ children }) {
+            return <ol className="my-2 ml-4 list-decimal space-y-1">{children}</ol>
+          },
+          li({ children }) {
+            return <li className="pl-1">{children}</li>
+          },
+          // Code blocks
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '')
             const isInline = !match && !className
             return isInline ? (
-              <code className="rounded bg-muted px-1.5 py-0.5 text-sm" {...props}>
+              <code className="rounded bg-muted px-1.5 py-0.5 text-sm font-mono" {...props}>
                 {children}
               </code>
             ) : (
@@ -75,10 +137,10 @@ function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
               </SyntaxHighlighter>
             )
           },
-          // Better table styling
+          // Tables
           table({ children }) {
             return (
-              <div className="overflow-x-auto my-2">
+              <div className="overflow-x-auto my-3">
                 <table className="min-w-full border-collapse border border-border">
                   {children}
                 </table>
@@ -95,15 +157,34 @@ function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
           td({ children }) {
             return <td className="border border-border px-3 py-2">{children}</td>
           },
-          // Better blockquote
+          // Blockquotes with callout support
           blockquote({ children }) {
+            // Check if this is a callout (starts with [!TYPE])
+            const childText = children?.toString() || ''
+            const calloutMatch = childText.match(/\[!(NOTE|INFO|TIP|WARNING|CAUTION|DANGER|ERROR|SUCCESS)\]/i)
+
+            if (calloutMatch) {
+              const type = calloutMatch[1].toLowerCase()
+              const Icon = calloutIcons[type] || Info
+              const style = calloutStyles[type] || calloutStyles.note
+
+              return (
+                <div className={cn('my-3 rounded-md border-l-4 p-3', style)}>
+                  <div className="flex items-start gap-2">
+                    <Icon className="h-5 w-5 mt-0.5 shrink-0" />
+                    <div className="flex-1 [&>p]:my-0">{children}</div>
+                  </div>
+                </div>
+              )
+            }
+
             return (
-              <blockquote className="border-l-4 border-primary/50 pl-4 italic text-muted-foreground">
+              <blockquote className="my-3 border-l-4 border-primary/50 pl-4 italic text-muted-foreground">
                 {children}
               </blockquote>
             )
           },
-          // Better links
+          // Links
           a({ href, children }) {
             return (
               <a
@@ -116,7 +197,11 @@ function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
               </a>
             )
           },
-          // Checkbox support for task lists
+          // Horizontal rule
+          hr() {
+            return <hr className="my-4 border-border" />
+          },
+          // Checkbox for task lists
           input({ type, checked, ...props }) {
             if (type === 'checkbox') {
               return (
@@ -131,6 +216,14 @@ function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
             }
             return <input type={type} {...props} />
           },
+          // Strong/bold
+          strong({ children }) {
+            return <strong className="font-semibold">{children}</strong>
+          },
+          // Emphasis/italic
+          em({ children }) {
+            return <em className="italic">{children}</em>
+          },
         }}
       >
         {content || '*No content*'}
@@ -140,7 +233,7 @@ function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
 }
 
 export function NotesSidebar() {
-  const { notesSidebarOpen, toggleNotesSidebar, setNotesSidebarOpen } = useUIStore()
+  const { notesSidebarOpen, toggleNotesSidebar, setNotesSidebarOpen, notesSidebarWidth, setNotesSidebarWidth } = useUIStore()
   const { notemark } = useSettingsStore()
   const {
     recentNotes,
@@ -300,7 +393,14 @@ export function NotesSidebar() {
   // Not configured state
   if (!isConfigured) {
     return (
-      <Sidebar side="right" open={notesSidebarOpen} onClose={toggleNotesSidebar} title="Notes">
+      <Sidebar
+        side="right"
+        open={notesSidebarOpen}
+        onClose={toggleNotesSidebar}
+        title="Notes"
+        width={notesSidebarWidth}
+        onWidthChange={setNotesSidebarWidth}
+      >
         <div className="flex h-full flex-col items-center justify-center p-4 text-center">
           <FileText className="mb-4 h-12 w-12 text-muted-foreground" />
           <p className="text-muted-foreground">
@@ -312,7 +412,14 @@ export function NotesSidebar() {
   }
 
   return (
-    <Sidebar side="right" open={notesSidebarOpen} onClose={toggleNotesSidebar} title="Notes">
+    <Sidebar
+      side="right"
+      open={notesSidebarOpen}
+      onClose={toggleNotesSidebar}
+      title="Notes"
+      width={notesSidebarWidth}
+      onWidthChange={setNotesSidebarWidth}
+    >
       <div className="flex h-full flex-col">
         {/* Quick Access Tabs */}
         {configuredNotes.length > 0 && (

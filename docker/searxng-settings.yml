@@ -1,0 +1,60 @@
+# SearXNG settings for Mashb0ard
+# This configures search behavior when embedded in Mashb0ard
+
+general:
+  debug: false
+  instance_name: "Mashb0ard Search"
+
+search:
+  # Open results in new browser tab
+  default_lang: "auto"
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 120
+
+# UI preferences - open results in new tab
+ui:
+  # This is the key setting - open search results in new tabs
+  results_on_new_tab: true
+  infinite_scroll: true
+  query_in_title: false
+  default_theme: "simple"
+
+server:
+  # Allow embedding in iframes
+  limiter: false
+  image_proxy: true
+  http_protocol_version: "1.1"
+
+# Enable popular engines
+engines:
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    disabled: false
+
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+
+  - name: github
+    engine: github
+    shortcut: gh
+    disabled: false
+
+  - name: stackoverflow
+    engine: stackexchange
+    shortcut: so
+    disabled: false
+    categories: [it, q&a]
+    sites: stackoverflow.com

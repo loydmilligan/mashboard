@@ -55,6 +55,7 @@ interface AIPreferences {
   summaryModel: string
   deepReasoningDefault: boolean
   customModels: string // newline-separated list of model IDs
+  streamingEnabled: boolean // Enable streaming responses (default: true)
 }
 
 interface AppearanceSettings {
@@ -177,6 +178,7 @@ const defaultSettings = {
     summaryModel: 'anthropic/claude-3-haiku',
     deepReasoningDefault: false,
     customModels: '', // empty = use defaults
+    streamingEnabled: true, // Enable streaming by default
   },
   appearance: {
     theme: 'dark' as const,

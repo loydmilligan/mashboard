@@ -6,6 +6,8 @@ interface UIState {
   // Sidebar states
   aiSidebarOpen: boolean
   notesSidebarOpen: boolean
+  aiSidebarWidth: number
+  notesSidebarWidth: number
 
   // Terminal panel
   terminalPanelOpen: boolean
@@ -27,6 +29,8 @@ interface UIState {
   toggleAiSidebar: () => void
   toggleNotesSidebar: () => void
   setNotesSidebarOpen: (open: boolean) => void
+  setAiSidebarWidth: (width: number) => void
+  setNotesSidebarWidth: (width: number) => void
   toggleTerminalPanel: () => void
   setTerminalPanelHeight: (height: number) => void
   toggleLogsPanel: () => void
@@ -45,6 +49,8 @@ export const useUIStore = create<UIState>()(
       // Initial states
       aiSidebarOpen: false,
       notesSidebarOpen: false,
+      aiSidebarWidth: 320,
+      notesSidebarWidth: 320,
       terminalPanelOpen: false,
       terminalPanelHeight: 300,
       logsPanelOpen: false,
@@ -58,6 +64,8 @@ export const useUIStore = create<UIState>()(
       toggleAiSidebar: () => set((state) => ({ aiSidebarOpen: !state.aiSidebarOpen })),
       toggleNotesSidebar: () => set((state) => ({ notesSidebarOpen: !state.notesSidebarOpen })),
       setNotesSidebarOpen: (open) => set({ notesSidebarOpen: open }),
+      setAiSidebarWidth: (width) => set({ aiSidebarWidth: width }),
+      setNotesSidebarWidth: (width) => set({ notesSidebarWidth: width }),
       toggleTerminalPanel: () => set((state) => ({ terminalPanelOpen: !state.terminalPanelOpen })),
       setTerminalPanelHeight: (height) => set({ terminalPanelHeight: height }),
       toggleLogsPanel: () => set((state) => ({ logsPanelOpen: !state.logsPanelOpen })),
@@ -81,6 +89,8 @@ export const useUIStore = create<UIState>()(
         // Only persist certain values, not open states
         terminalPanelHeight: state.terminalPanelHeight,
         logsPanelHeight: state.logsPanelHeight,
+        aiSidebarWidth: state.aiSidebarWidth,
+        notesSidebarWidth: state.notesSidebarWidth,
       }),
     }
   )

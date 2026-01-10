@@ -195,6 +195,7 @@ services:
       - INSTANCE_NAME=${SEARXNG_INSTANCE_NAME:-Mashb0ard Search}
     volumes:
       - searxng_data:/etc/searxng
+      - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
     networks:
       - mashb0ard-net
 

@@ -47,12 +47,9 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-4">
-      {/* Left section: Logo, Pomodoro, and AI toggle */}
+      {/* Left section: Logo and AI toggle */}
       <div className="flex items-center gap-3">
         <h1 className="text-xl font-semibold tracking-tight">{APP_NAME}</h1>
-
-        {/* Pomodoro Timer */}
-        <HeaderPomodoro expanded={pomodoroExpanded} onToggle={togglePomodoro} />
 
         <div className="h-6 w-px bg-border" />
 
@@ -69,13 +66,14 @@ export function Header() {
         </Button>
       </div>
 
-      {/* Center: Search bar */}
-      <div className="hidden flex-1 justify-center px-4 md:flex">
+      {/* Center section: Pomodoro Timer + Search */}
+      <div className="hidden md:flex items-center gap-4 flex-1 justify-center">
+        <HeaderPomodoro expanded={pomodoroExpanded} onToggle={togglePomodoro} />
         <SearchBar />
       </div>
 
       {/* Right section: Action icons */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
         <SnippetsPopover />
 
         <Button
