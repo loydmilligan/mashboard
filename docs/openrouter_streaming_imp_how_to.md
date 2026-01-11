@@ -1,0 +1,16 @@
+Technical Specification: Implementing Streaming Chat with OpenRouterPurpose: This document serves as context for an AI Developer to implement a real-time streaming chat interface using the OpenRouter API.1. API ArchitectureOpenRouter provides a unified interface for various LLMs (Claude, GPT-4, Llama 3, etc.) using an OpenAI-compatible API schema.Base ConfigurationBase URL: https://openrouter.ai/api/v1Endpoint: /chat/completionsMethod: POSTContent-Type: application/jsonCritical Headers (Mandatory)Unlike standard OpenAI requests, OpenRouter requires specific headers for analytics and ranking. Missing these often results in lower tier reliability.Authorization: Bearer $OPENROUTER_API_KEYHTTP-Referer: ${YOUR_SITE_URL} (Required for OpenRouter rankings)X-Title: ${YOUR_SITE_NAME} (Shows in OpenRouter dashboard)2. Request Payload SchemaThe AI must generate a JSON body capable of handling model routing.{
+  "model": "anthropic/claude-3.5-sonnet", // Vendor prefix is required
+  "messages": [
+    { "role": "system", "content": "You are a helpful assistant." },
+    { "role": "user", "content": "Explain quantum computing." }
+  ],
+  "stream": true, // CRITICAL: Must be true for SSE
+  "temperature": 0.7
+}
+3. Handling the Stream (Server-Sent Events)The response will not be a single JSON object. It is a continuous stream of data chunks. The implementation must handle the following flow:The Data Stream FormatThe raw stream consists of lines starting with data:.Standard Chunk: data: {"id": "...", "choices": [{"delta": {"content": "Hello"}}], ...}Termination Sequence: data: [DONE]Implementation Logic (Pseudo-code)Initiate Fetch: Call fetch() with the payload and headers.Reader Instantiation: Get response.body.getReader().Decoder: Initialize TextDecoder("utf-8").The Loop:await reader.read()Decode the value (Uint8Array) to text.Buffer Handling: Warning: A single read may contain incomplete JSON or multiple "data:" lines. Accumulate text in a buffer and split by newlines.Parsing:Strip data:  prefix.Check for [DONE].JSON.parse() the remaining string.Extract choices[0].delta.content.State Update: Append the delta content to the current UI message state. Do not replace the state; append to it.
+
+4. Common Pitfalls & Requirements
+Double Rendering: React's StrictMode often causes stream duplication. Ensure the stream reader handles component mounting/unmounting or uses a useRef lock to prevent dual connections.
+JSON Parse Errors: The stream often cuts a JSON object in half between chunks. The parser must be resilient—only parsing complete lines and buffering the remainder.Vendor Prefixes: OpenRouter models always require the provider prefix (e.g., google/gemini-pro, not just gemini-pro).Error Handling: If the API returns a 4xx/5xx status, the body is usually not a stream but a standard JSON error object. The code must check response.ok before starting the stream reader.
+
+5. Security Note for Frontend ImplementationIf implementing client-side:Risk: Exposing the OpenRouter API key in the browser network tab.Mitigation: For production, this logic must reside in a server-side proxy (Next.js API route / Express / Python FastAPI) that holds the key and forwards the stream to the client.Proxy Logic: The proxy must pipe the response headers and data stream directly to the client without buffering the entire response.

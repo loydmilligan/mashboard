@@ -142,9 +142,9 @@ export function ModelSelector({ value, onChange, disabled }: ModelSelectorProps)
           )
         })}
         {models.length === 0 && !isLoading && (
-          <SelectItem value="" disabled className="text-xs text-muted-foreground">
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">
             No models configured
-          </SelectItem>
+          </div>
         )}
       </SelectContent>
     </Select>
