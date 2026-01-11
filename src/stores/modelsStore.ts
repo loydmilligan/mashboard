@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AIModel, CreateAIModelInput, UpdateAIModelInput } from '@/types/models'
+import type { AIModel, CreateAIModelInput, UpdateAIModelInput, OpenRouterModelInfo } from '@/types/models'
 import { modelsService } from '@/services/models'
 
 interface ModelsState {
@@ -15,6 +15,7 @@ interface ModelsState {
   deleteModel: (id: number) => Promise<void>
   reorderModels: (modelIds: number[]) => Promise<void>
   toggleFavorite: (id: number) => Promise<void>
+  lookupModel: (modelId: string) => Promise<OpenRouterModelInfo | null>
 
   // Helpers
   getModelByOpenRouterId: (modelId: string) => AIModel | undefined
@@ -120,6 +121,17 @@ export const useModelsStore = create<ModelsState>()((set, get) => ({
         error: error instanceof Error ? error.message : 'Failed to toggle favorite',
       })
       throw error
+    }
+  },
+
+  lookupModel: async (modelId) => {
+    try {
+      return await modelsService.lookupModel(modelId)
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to lookup model',
+      })
+      return null
     }
   },
 

@@ -11,6 +11,8 @@ import {
   GripVertical,
   Zap,
   ZapOff,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,6 +46,7 @@ import {
 import { useModelsStore } from '@/stores/modelsStore'
 import { cn } from '@/lib/utils'
 import type { AIModel, ModelType, CreateAIModelInput } from '@/types/models'
+import { getModelProvider, getCostTier } from '@/types/models'
 
 const MODEL_TYPE_ICONS: Record<ModelType, typeof Sparkles> = {
   general: Sparkles,
@@ -52,11 +55,79 @@ const MODEL_TYPE_ICONS: Record<ModelType, typeof Sparkles> = {
   reasoning: Brain,
 }
 
-const MODEL_TYPE_LABELS: Record<ModelType, string> = {
-  general: 'General',
-  coding: 'Coding',
-  image: 'Image',
-  reasoning: 'Reasoning',
+// Map provider names (from model_id) to icon filenames
+const PROVIDER_ICON_MAP: Record<string, string> = {
+  anthropic: 'anthropic',
+  openai: 'openai',
+  google: 'gemini',
+  'google-vertex': 'gemini',
+  deepseek: 'deepseek',
+  mistralai: 'mistral',
+  'x-ai': 'xai',
+  minimax: 'minimax',
+  'black-forest-labs': 'black_forest_labs',
+}
+
+// Fallback text badges for providers without icons
+const PROVIDER_FALLBACK: Record<string, { abbr: string; color: string; bgColor: string }> = {
+  'meta-llama': { abbr: 'M', color: 'text-blue-700', bgColor: 'bg-blue-100' },
+  cohere: { abbr: 'C', color: 'text-purple-600', bgColor: 'bg-purple-100' },
+  perplexity: { abbr: 'P', color: 'text-teal-600', bgColor: 'bg-teal-100' },
+  qwen: { abbr: 'Q', color: 'text-violet-600', bgColor: 'bg-violet-100' },
+}
+
+// Provider icon component - uses SVG icons with text fallback
+function ProviderIcon({ provider, className }: { provider: string; className?: string }) {
+  const iconName = PROVIDER_ICON_MAP[provider]
+
+  if (iconName) {
+    return (
+      <img
+        src={`/icons/providers/dark/${iconName}.svg`}
+        alt={provider}
+        title={provider}
+        className={cn('w-4 h-4', className)}
+      />
+    )
+  }
+
+  // Fallback to text badge
+  const fallback = PROVIDER_FALLBACK[provider] || {
+    abbr: provider.slice(0, 2).toUpperCase(),
+    color: 'text-gray-600',
+    bgColor: 'bg-gray-100'
+  }
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center justify-center w-5 h-5 rounded text-[9px] font-bold',
+        fallback.color,
+        fallback.bgColor,
+        className
+      )}
+      title={provider}
+    >
+      {fallback.abbr}
+    </span>
+  )
+}
+
+// Cost tier indicator component
+function CostIndicator({ tier }: { tier: '$' | '$$' | '$$$' | null }) {
+  if (!tier) return null
+
+  const colors = {
+    '$': 'text-green-500',
+    '$$': 'text-yellow-500',
+    '$$$': 'text-red-500',
+  }
+
+  return (
+    <span className={cn('text-[10px] font-medium', colors[tier])} title={`Cost tier: ${tier}`}>
+      {tier}
+    </span>
+  )
 }
 
 const EMPTY_FORM: CreateAIModelInput = {
@@ -68,22 +139,70 @@ const EMPTY_FORM: CreateAIModelInput = {
   model_type: 'general',
   supports_deep_reasoning: false,
   supports_streaming: true,
+  input_modalities: [],
+  output_modalities: [],
+  context_length: undefined,
+  pricing_prompt: undefined,
+  pricing_completion: undefined,
+  pricing_image: undefined,
 }
 
 export function ModelsManager() {
-  const { models, isLoading, error, initialized, fetchModels, createModel, updateModel, deleteModel, toggleFavorite } = useModelsStore()
+  const { models, isLoading, error, initialized, fetchModels, createModel, updateModel, deleteModel, toggleFavorite, lookupModel } = useModelsStore()
 
   const [showDialog, setShowDialog] = useState(false)
   const [editingModel, setEditingModel] = useState<AIModel | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<AIModel | null>(null)
   const [form, setForm] = useState<CreateAIModelInput>(EMPTY_FORM)
   const [formError, setFormError] = useState<string | null>(null)
+  const [isLookingUp, setIsLookingUp] = useState(false)
 
   useEffect(() => {
     if (!initialized && !isLoading) {
       fetchModels()
     }
   }, [initialized, isLoading, fetchModels])
+
+  const handleLookup = async () => {
+    if (!form.model_id.trim()) {
+      setFormError('Enter a model ID first')
+      return
+    }
+
+    setIsLookingUp(true)
+    setFormError(null)
+
+    try {
+      const info = await lookupModel(form.model_id)
+      if (info) {
+        setForm((prev) => ({
+          ...prev,
+          nickname: prev.nickname || info.name,
+          description: prev.description || info.description || '',
+          supports_streaming: info.supports_streaming,
+          supports_deep_reasoning: info.supports_deep_reasoning,
+          input_modalities: info.input_modalities,
+          output_modalities: info.output_modalities,
+          context_length: info.context_length,
+          pricing_prompt: info.pricing_prompt,
+          pricing_completion: info.pricing_completion,
+          pricing_image: info.pricing_image,
+          // Auto-detect model type based on modalities
+          model_type: info.output_modalities.includes('image')
+            ? 'image'
+            : info.supports_deep_reasoning
+              ? 'reasoning'
+              : prev.model_type,
+        }))
+      } else {
+        setFormError('Model not found on OpenRouter')
+      }
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'Failed to lookup model')
+    } finally {
+      setIsLookingUp(false)
+    }
+  }
 
   const handleOpenCreate = () => {
     setEditingModel(null)
@@ -103,6 +222,12 @@ export function ModelsManager() {
       model_type: model.model_type,
       supports_deep_reasoning: model.supports_deep_reasoning,
       supports_streaming: model.supports_streaming,
+      input_modalities: model.input_modalities || [],
+      output_modalities: model.output_modalities || [],
+      context_length: model.context_length,
+      pricing_prompt: model.pricing_prompt,
+      pricing_completion: model.pricing_completion,
+      pricing_image: model.pricing_image,
     })
     setFormError(null)
     setShowDialog(true)
@@ -172,6 +297,11 @@ export function ModelsManager() {
         <div className="space-y-1">
           {models.map((model) => {
             const TypeIcon = MODEL_TYPE_ICONS[model.model_type] || Sparkles
+            const provider = getModelProvider(model.model_id)
+            const costTier = getCostTier(model.pricing_prompt, model.pricing_completion)
+            const hasImageInput = model.input_modalities?.includes('image')
+            const hasImageOutput = model.output_modalities?.includes('image')
+
             return (
               <div
                 key={model.id}
@@ -191,10 +321,11 @@ export function ModelsManager() {
                     )}
                   />
                 </button>
-                <TypeIcon className="h-4 w-4 text-muted-foreground" />
+                <ProviderIcon provider={provider} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="font-medium text-sm truncate">{model.nickname}</span>
+                    <CostIndicator tier={costTier} />
                     {model.supports_streaming ? (
                       <span title="Supports streaming"><Zap className="h-3 w-3 text-green-500" /></span>
                     ) : (
@@ -203,14 +334,23 @@ export function ModelsManager() {
                     {model.supports_deep_reasoning && (
                       <span title="Deep reasoning"><Brain className="h-3 w-3 text-purple-500" /></span>
                     )}
+                    {hasImageInput && (
+                      <span title="Accepts images"><Image className="h-3 w-3 text-blue-500" /></span>
+                    )}
+                    {hasImageOutput && (
+                      <span title="Generates images"><Image className="h-3 w-3 text-pink-500" /></span>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground font-mono truncate">
                     {model.model_id}
+                    {model.context_length && (
+                      <span className="ml-2 text-[10px]">
+                        {(model.context_length / 1000).toFixed(0)}k ctx
+                      </span>
+                    )}
                   </div>
                 </div>
-                <span className="text-xs text-muted-foreground px-2">
-                  {MODEL_TYPE_LABELS[model.model_type]}
-                </span>
+                <TypeIcon className="h-4 w-4 text-muted-foreground" />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -247,15 +387,31 @@ export function ModelsManager() {
             )}
             <div className="space-y-2">
               <Label htmlFor="model-id">Model ID (OpenRouter)</Label>
-              <Input
-                id="model-id"
-                value={form.model_id}
-                onChange={(e) => setForm({ ...form, model_id: e.target.value })}
-                placeholder="anthropic/claude-sonnet-4"
-                className="font-mono text-sm"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="model-id"
+                  value={form.model_id}
+                  onChange={(e) => setForm({ ...form, model_id: e.target.value })}
+                  placeholder="anthropic/claude-sonnet-4"
+                  className="font-mono text-sm flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLookup}
+                  disabled={isLookingUp || !form.model_id.trim()}
+                  title="Fetch details from OpenRouter"
+                >
+                  {isLookingUp ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground">
-                Exact ID from OpenRouter (e.g., vendor/model-name)
+                Exact ID from OpenRouter — click refresh to auto-fill details
               </p>
             </div>
             <div className="space-y-2">

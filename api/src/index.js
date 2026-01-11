@@ -144,9 +144,27 @@ async function initDatabase() {
         supports_deep_reasoning BOOLEAN DEFAULT false,
         supports_streaming BOOLEAN DEFAULT true,
         sort_order INTEGER DEFAULT 0,
+        -- OpenRouter metadata fields
+        input_modalities TEXT[] DEFAULT '{}',
+        output_modalities TEXT[] DEFAULT '{}',
+        context_length INTEGER,
+        pricing_prompt VARCHAR(30),
+        pricing_completion VARCHAR(30),
+        pricing_image VARCHAR(30),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- Add new columns if they don't exist (for existing installations)
+      DO $$ BEGIN
+        ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS input_modalities TEXT[] DEFAULT '{}';
+        ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS output_modalities TEXT[] DEFAULT '{}';
+        ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS context_length INTEGER;
+        ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS pricing_prompt VARCHAR(30);
+        ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS pricing_completion VARCHAR(30);
+        ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS pricing_image VARCHAR(30);
+      EXCEPTION WHEN others THEN NULL;
+      END $$;
 
       -- Create indexes
       CREATE INDEX IF NOT EXISTS idx_habit_completions_date
@@ -895,15 +913,25 @@ app.get('/models/:identifier', async (req, res) => {
 // Create a new AI model
 app.post('/models', async (req, res) => {
   try {
-    const { model_id, nickname, description, tags, favorite, model_type, supports_deep_reasoning, supports_streaming, sort_order } = req.body
+    const {
+      model_id, nickname, description, tags, favorite, model_type,
+      supports_deep_reasoning, supports_streaming, sort_order,
+      input_modalities, output_modalities, context_length,
+      pricing_prompt, pricing_completion, pricing_image
+    } = req.body
 
     if (!model_id || !nickname) {
       return res.status(400).json({ error: 'model_id and nickname are required' })
     }
 
     const result = await pool.query(
-      `INSERT INTO ai_models (model_id, nickname, description, tags, favorite, model_type, supports_deep_reasoning, supports_streaming, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO ai_models (
+        model_id, nickname, description, tags, favorite, model_type,
+        supports_deep_reasoning, supports_streaming, sort_order,
+        input_modalities, output_modalities, context_length,
+        pricing_prompt, pricing_completion, pricing_image
+      )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         model_id,
@@ -914,7 +942,13 @@ app.post('/models', async (req, res) => {
         model_type || 'general',
         supports_deep_reasoning || false,
         supports_streaming !== false,
-        sort_order || 0
+        sort_order || 0,
+        input_modalities || [],
+        output_modalities || [],
+        context_length || null,
+        pricing_prompt || null,
+        pricing_completion || null,
+        pricing_image || null
       ]
     )
     res.status(201).json(result.rows[0])
@@ -931,7 +965,12 @@ app.post('/models', async (req, res) => {
 app.put('/models/:id', async (req, res) => {
   try {
     const { id } = req.params
-    const { model_id, nickname, description, tags, favorite, model_type, supports_deep_reasoning, supports_streaming, sort_order } = req.body
+    const {
+      model_id, nickname, description, tags, favorite, model_type,
+      supports_deep_reasoning, supports_streaming, sort_order,
+      input_modalities, output_modalities, context_length,
+      pricing_prompt, pricing_completion, pricing_image
+    } = req.body
 
     const result = await pool.query(
       `UPDATE ai_models
@@ -944,10 +983,21 @@ app.put('/models/:id', async (req, res) => {
            supports_deep_reasoning = COALESCE($7, supports_deep_reasoning),
            supports_streaming = COALESCE($8, supports_streaming),
            sort_order = COALESCE($9, sort_order),
+           input_modalities = COALESCE($10, input_modalities),
+           output_modalities = COALESCE($11, output_modalities),
+           context_length = COALESCE($12, context_length),
+           pricing_prompt = COALESCE($13, pricing_prompt),
+           pricing_completion = COALESCE($14, pricing_completion),
+           pricing_image = COALESCE($15, pricing_image),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $10
+       WHERE id = $16
        RETURNING *`,
-      [model_id, nickname, description, tags, favorite, model_type, supports_deep_reasoning, supports_streaming, sort_order, id]
+      [
+        model_id, nickname, description, tags, favorite, model_type,
+        supports_deep_reasoning, supports_streaming, sort_order,
+        input_modalities, output_modalities, context_length,
+        pricing_prompt, pricing_completion, pricing_image, id
+      ]
     )
 
     if (result.rows.length === 0) {
@@ -1039,6 +1089,46 @@ app.put('/models/:id/favorite', async (req, res) => {
   } catch (error) {
     console.error('Error toggling favorite:', error)
     res.status(500).json({ error: 'Failed to toggle favorite' })
+  }
+})
+
+// Lookup model details from OpenRouter API
+app.get('/models/lookup/:modelId(*)', async (req, res) => {
+  try {
+    const modelId = req.params.modelId
+
+    // Fetch all models from OpenRouter (they don't have a single-model endpoint)
+    const response = await fetch('https://openrouter.ai/api/v1/models')
+    if (!response.ok) {
+      return res.status(502).json({ error: 'Failed to fetch from OpenRouter' })
+    }
+
+    const data = await response.json()
+    const model = data.data?.find(m => m.id === modelId)
+
+    if (!model) {
+      return res.status(404).json({ error: 'Model not found on OpenRouter' })
+    }
+
+    // Parse OpenRouter response into our format
+    const result = {
+      model_id: model.id,
+      name: model.name,
+      description: model.description || null,
+      context_length: model.context_length || null,
+      input_modalities: model.architecture?.input_modalities || [],
+      output_modalities: model.architecture?.output_modalities || [],
+      pricing_prompt: model.pricing?.prompt || null,
+      pricing_completion: model.pricing?.completion || null,
+      pricing_image: model.pricing?.image || null,
+      supports_streaming: model.supported_parameters?.includes('stream') ?? true,
+      supports_deep_reasoning: model.supported_parameters?.includes('reasoning') ?? false,
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Error looking up model:', error)
+    res.status(500).json({ error: 'Failed to lookup model' })
   }
 })
 

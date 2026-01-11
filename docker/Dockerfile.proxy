@@ -30,9 +30,9 @@ COPY docker/nginx.proxy.template.conf /etc/nginx/templates/default.conf.template
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Fix permissions for all static files
-RUN chmod -R 644 /usr/share/nginx/html/* && \
-    chmod 755 /usr/share/nginx/html /usr/share/nginx/html/assets
+# Fix permissions for all static files (644 for files, 755 for directories)
+RUN find /usr/share/nginx/html -type f -exec chmod 644 {} \; && \
+    find /usr/share/nginx/html -type d -exec chmod 755 {} \;
 
 # Expose port
 EXPOSE 80

@@ -1,4 +1,4 @@
-import type { AIModel, CreateAIModelInput, UpdateAIModelInput } from '@/types/models'
+import type { AIModel, CreateAIModelInput, UpdateAIModelInput, OpenRouterModelInfo } from '@/types/models'
 
 const API_BASE = '/api/mashboard'
 
@@ -85,6 +85,18 @@ class ModelsService {
     })
     if (!response.ok) {
       throw new Error('Failed to toggle favorite')
+    }
+    return response.json()
+  }
+
+  // Lookup model details from OpenRouter API
+  async lookupModel(modelId: string): Promise<OpenRouterModelInfo | null> {
+    const response = await fetch(`${API_BASE}/models/lookup/${encodeURIComponent(modelId)}`)
+    if (response.status === 404) {
+      return null
+    }
+    if (!response.ok) {
+      throw new Error('Failed to lookup model from OpenRouter')
     }
     return response.json()
   }
