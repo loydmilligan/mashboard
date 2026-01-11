@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react'
 import { Copy, Search } from 'lucide-react'
 import {
   ContextMenu,
@@ -8,7 +9,6 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { useContentStore } from '@/stores/contentStore'
-import { useTextSelection } from '@/hooks/useTextSelection'
 
 interface TextSelectionContextMenuProps {
   children: React.ReactNode
@@ -17,7 +17,7 @@ interface TextSelectionContextMenuProps {
 
 /**
  * Wraps content with a context menu that provides text selection actions.
- * Actions are only enabled when text is selected.
+ * Captures selected text when menu opens to preserve it during interaction.
  *
  * Note: This only works for text in the main document, not inside cross-origin iframes.
  */
@@ -25,39 +25,51 @@ export function TextSelectionContextMenu({
   children,
   className,
 }: TextSelectionContextMenuProps) {
-  const { selectedText, hasSelection, clearSelection } = useTextSelection()
+  const [capturedText, setCapturedText] = useState('')
   const { openTab } = useContentStore()
 
-  const handleCopy = () => {
-    if (selectedText) {
-      navigator.clipboard.writeText(selectedText)
+  // Capture the selected text when the context menu opens
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      const selection = window.getSelection()
+      const text = selection?.toString().trim() || ''
+      setCapturedText(text)
     }
-  }
+  }, [])
 
-  const handleSearchInSearXNG = () => {
-    if (selectedText) {
+  const handleCopy = useCallback(() => {
+    if (capturedText) {
+      navigator.clipboard.writeText(capturedText)
+    }
+  }, [capturedText])
+
+  const handleSearchInSearXNG = useCallback(() => {
+    if (capturedText) {
       openTab({
         appType: 'searxng',
-        title: `Search: ${selectedText.slice(0, 30)}${selectedText.length > 30 ? '...' : ''}`,
-        props: { query: selectedText },
+        title: `Search: ${capturedText.slice(0, 30)}${capturedText.length > 30 ? '...' : ''}`,
+        props: { query: capturedText },
       })
-      clearSelection()
+      // Clear the text selection
+      window.getSelection()?.removeAllRanges()
     }
-  }
+  }, [capturedText, openTab])
+
+  const hasSelection = capturedText.length > 0
 
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={handleOpenChange}>
       <ContextMenuTrigger asChild className={className}>
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
-        <ContextMenuItem onClick={handleCopy} disabled={!hasSelection}>
+        <ContextMenuItem onSelect={handleCopy} disabled={!hasSelection}>
           <Copy className="mr-2 h-4 w-4" />
           Copy
           <ContextMenuShortcut>⌘C</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={handleSearchInSearXNG} disabled={!hasSelection}>
+        <ContextMenuItem onSelect={handleSearchInSearXNG} disabled={!hasSelection}>
           <Search className="mr-2 h-4 w-4" />
           Search in SearXNG
         </ContextMenuItem>
