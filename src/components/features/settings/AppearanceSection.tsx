@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Monitor, Moon, Sun } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Slider } from '@/components/ui/slider'
 import {
   Select,
   SelectContent,
@@ -11,9 +12,12 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useUIStore } from '@/stores/uiStore'
+import { LAYOUT } from '@/lib/constants'
 
 export function AppearanceSection() {
   const { appearance, setAppearance, panelTimeouts, setPanelTimeouts } = useSettingsStore()
+  const { aiSidebarWidth, notesSidebarWidth, setAiSidebarWidth, setNotesSidebarWidth } = useUIStore()
 
   // Apply theme changes
   useEffect(() => {
@@ -95,6 +99,48 @@ export function AppearanceSection() {
               ? 'Sidebars will float over the main content area'
               : 'Sidebars will push the main content to make room'}
           </p>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Sidebar Widths */}
+      <div className="space-y-4">
+        <h3 className="font-medium">Sidebar Widths</h3>
+        <p className="text-sm text-muted-foreground">
+          Set the default width for each sidebar. You can also drag the edge of an open sidebar to resize it.
+        </p>
+        <div className="grid gap-6">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="ai-width">AI Chat Sidebar</Label>
+              <span className="text-sm text-muted-foreground">{aiSidebarWidth}px</span>
+            </div>
+            <Slider
+              id="ai-width"
+              value={[aiSidebarWidth]}
+              onValueChange={([value]) => setAiSidebarWidth(value)}
+              min={LAYOUT.SIDEBAR_MIN_WIDTH}
+              max={LAYOUT.SIDEBAR_MAX_WIDTH}
+              step={10}
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="notes-width">Notes Sidebar</Label>
+              <span className="text-sm text-muted-foreground">{notesSidebarWidth}px</span>
+            </div>
+            <Slider
+              id="notes-width"
+              value={[notesSidebarWidth]}
+              onValueChange={([value]) => setNotesSidebarWidth(value)}
+              min={LAYOUT.SIDEBAR_MIN_WIDTH}
+              max={LAYOUT.SIDEBAR_MAX_WIDTH}
+              step={10}
+              className="w-full"
+            />
+          </div>
         </div>
       </div>
 

@@ -151,6 +151,7 @@ async function initDatabase() {
         pricing_prompt VARCHAR(30),
         pricing_completion VARCHAR(30),
         pricing_image VARCHAR(30),
+        cost_tier VARCHAR(5),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -163,6 +164,7 @@ async function initDatabase() {
         ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS pricing_prompt VARCHAR(30);
         ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS pricing_completion VARCHAR(30);
         ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS pricing_image VARCHAR(30);
+        ALTER TABLE ai_models ADD COLUMN IF NOT EXISTS cost_tier VARCHAR(5);
       EXCEPTION WHEN others THEN NULL;
       END $$;
 
@@ -917,7 +919,7 @@ app.post('/models', async (req, res) => {
       model_id, nickname, description, tags, favorite, model_type,
       supports_deep_reasoning, supports_streaming, sort_order,
       input_modalities, output_modalities, context_length,
-      pricing_prompt, pricing_completion, pricing_image
+      pricing_prompt, pricing_completion, pricing_image, cost_tier
     } = req.body
 
     if (!model_id || !nickname) {
@@ -929,9 +931,9 @@ app.post('/models', async (req, res) => {
         model_id, nickname, description, tags, favorite, model_type,
         supports_deep_reasoning, supports_streaming, sort_order,
         input_modalities, output_modalities, context_length,
-        pricing_prompt, pricing_completion, pricing_image
+        pricing_prompt, pricing_completion, pricing_image, cost_tier
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
       [
         model_id,
@@ -948,7 +950,8 @@ app.post('/models', async (req, res) => {
         context_length || null,
         pricing_prompt || null,
         pricing_completion || null,
-        pricing_image || null
+        pricing_image || null,
+        cost_tier || null
       ]
     )
     res.status(201).json(result.rows[0])
@@ -969,7 +972,7 @@ app.put('/models/:id', async (req, res) => {
       model_id, nickname, description, tags, favorite, model_type,
       supports_deep_reasoning, supports_streaming, sort_order,
       input_modalities, output_modalities, context_length,
-      pricing_prompt, pricing_completion, pricing_image
+      pricing_prompt, pricing_completion, pricing_image, cost_tier
     } = req.body
 
     const result = await pool.query(
@@ -989,14 +992,15 @@ app.put('/models/:id', async (req, res) => {
            pricing_prompt = COALESCE($13, pricing_prompt),
            pricing_completion = COALESCE($14, pricing_completion),
            pricing_image = COALESCE($15, pricing_image),
+           cost_tier = $16,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $16
+       WHERE id = $17
        RETURNING *`,
       [
         model_id, nickname, description, tags, favorite, model_type,
         supports_deep_reasoning, supports_streaming, sort_order,
         input_modalities, output_modalities, context_length,
-        pricing_prompt, pricing_completion, pricing_image, id
+        pricing_prompt, pricing_completion, pricing_image, cost_tier, id
       ]
     )
 

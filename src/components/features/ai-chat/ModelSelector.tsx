@@ -118,7 +118,7 @@ export function ModelSelector({ value, onChange, disabled }: ModelSelectorProps)
       <SelectContent>
         {models.map((model) => {
           const provider = getModelProvider(model.model_id)
-          const costTier = getCostTier(model.pricing_prompt, model.pricing_completion)
+          const costTier = getCostTier(model.pricing_prompt, model.pricing_completion, model.cost_tier)
           const hasImageInput = model.input_modalities?.includes('image')
 
           return (

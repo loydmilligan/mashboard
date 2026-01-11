@@ -1,4 +1,5 @@
 export type ModelType = 'general' | 'coding' | 'image' | 'reasoning'
+export type CostTier = '$' | '$$' | '$$$'
 
 // Provider extracted from model_id (e.g., "anthropic" from "anthropic/claude-3.5-sonnet")
 export type ModelProvider =
@@ -32,6 +33,7 @@ export interface AIModel {
   pricing_prompt?: string
   pricing_completion?: string
   pricing_image?: string
+  cost_tier?: CostTier // Manual override for cost tier
   created_at: string
   updated_at: string
 }
@@ -52,6 +54,7 @@ export interface CreateAIModelInput {
   pricing_prompt?: string
   pricing_completion?: string
   pricing_image?: string
+  cost_tier?: CostTier
 }
 
 export interface UpdateAIModelInput {
@@ -70,6 +73,7 @@ export interface UpdateAIModelInput {
   pricing_prompt?: string
   pricing_completion?: string
   pricing_image?: string
+  cost_tier?: CostTier
 }
 
 // Response from OpenRouter lookup API
@@ -93,7 +97,11 @@ export function getModelProvider(modelId: string): ModelProvider {
 }
 
 // Helper to calculate cost tier ($, $$, $$$)
-export function getCostTier(pricingPrompt?: string, pricingCompletion?: string): '$' | '$$' | '$$$' | null {
+// If costTierOverride is set, it takes precedence over calculated value
+export function getCostTier(pricingPrompt?: string, pricingCompletion?: string, costTierOverride?: CostTier): CostTier | null {
+  // Manual override takes precedence
+  if (costTierOverride) return costTierOverride
+
   if (!pricingPrompt && !pricingCompletion) return null
 
   // Average of prompt and completion cost per 1M tokens

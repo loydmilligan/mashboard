@@ -45,7 +45,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useModelsStore } from '@/stores/modelsStore'
 import { cn } from '@/lib/utils'
-import type { AIModel, ModelType, CreateAIModelInput } from '@/types/models'
+import type { AIModel, ModelType, CreateAIModelInput, CostTier } from '@/types/models'
 import { getModelProvider, getCostTier } from '@/types/models'
 
 const MODEL_TYPE_ICONS: Record<ModelType, typeof Sparkles> = {
@@ -145,6 +145,7 @@ const EMPTY_FORM: CreateAIModelInput = {
   pricing_prompt: undefined,
   pricing_completion: undefined,
   pricing_image: undefined,
+  cost_tier: undefined,
 }
 
 export function ModelsManager() {
@@ -228,6 +229,7 @@ export function ModelsManager() {
       pricing_prompt: model.pricing_prompt,
       pricing_completion: model.pricing_completion,
       pricing_image: model.pricing_image,
+      cost_tier: model.cost_tier,
     })
     setFormError(null)
     setShowDialog(true)
@@ -298,7 +300,7 @@ export function ModelsManager() {
           {models.map((model) => {
             const TypeIcon = MODEL_TYPE_ICONS[model.model_type] || Sparkles
             const provider = getModelProvider(model.model_id)
-            const costTier = getCostTier(model.pricing_prompt, model.pricing_completion)
+            const costTier = getCostTier(model.pricing_prompt, model.pricing_completion, model.cost_tier)
             const hasImageInput = model.input_modalities?.includes('image')
             const hasImageOutput = model.output_modalities?.includes('image')
 
@@ -433,22 +435,47 @@ export function ModelsManager() {
                 rows={2}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="model-type">Type</Label>
-              <Select
-                value={form.model_type}
-                onValueChange={(value: ModelType) => setForm({ ...form, model_type: value })}
-              >
-                <SelectTrigger id="model-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="general">General</SelectItem>
-                  <SelectItem value="coding">Coding</SelectItem>
-                  <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="reasoning">Reasoning</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="model-type">Type</Label>
+                <Select
+                  value={form.model_type}
+                  onValueChange={(value: ModelType) => setForm({ ...form, model_type: value })}
+                >
+                  <SelectTrigger id="model-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general">General</SelectItem>
+                    <SelectItem value="coding">Coding</SelectItem>
+                    <SelectItem value="image">Image</SelectItem>
+                    <SelectItem value="reasoning">Reasoning</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cost-tier">Cost Tier</Label>
+                <Select
+                  value={form.cost_tier || 'auto'}
+                  onValueChange={(value: string) => setForm({ ...form, cost_tier: value === 'auto' ? undefined : value as CostTier })}
+                >
+                  <SelectTrigger id="cost-tier">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto (from pricing)</SelectItem>
+                    <SelectItem value="$">
+                      <span className="text-green-500 font-medium">$</span> — Cheap
+                    </SelectItem>
+                    <SelectItem value="$$">
+                      <span className="text-yellow-500 font-medium">$$</span> — Mid-range
+                    </SelectItem>
+                    <SelectItem value="$$$">
+                      <span className="text-red-500 font-medium">$$$</span> — Expensive
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
