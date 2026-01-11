@@ -155,9 +155,8 @@ function MessageBubble({ message }: { message: Message }) {
 
 export function MessageList({ messages, streamingContent, isStreaming }: MessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom when new messages arrive or streaming updates
+  // Auto-scroll when new content arrives
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
@@ -184,42 +183,68 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
     ? messages.filter((m, i) => !(i === messages.length - 1 && m.role === 'assistant' && m.content === ''))
     : messages
 
+  // Calculate if we should center content (few messages)
+  const messageCount = displayMessages.length + (isStreaming ? 1 : 0)
+  const shouldCenter = messageCount <= 3
+
   return (
     <TextSelectionContextMenu>
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
-        {displayMessages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
-        ))}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto flex flex-col">
+        {/* Top spacer - grows when few messages to push content toward center */}
+        {shouldCenter && <div className="flex-1 min-h-8" />}
 
-        {/* Streaming/Thinking indicator - shown while waiting for or receiving response */}
-        {isStreaming && (
-          <div className="group flex gap-3 px-4 py-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-              <Bot className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-xs font-medium">Assistant</span>
-                {streamingContent && (
-                  <span className="text-xs text-muted-foreground">typing...</span>
-                )}
-              </div>
-              <div className="text-sm">
-                {streamingContent ? (
-                  /* Show streaming content as it arrives */
-                  <MessageContent content={streamingContent} />
-                ) : (
-                  /* Thinking animation while waiting for first token */
-                  <ThinkingAnimation />
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Messages container */}
+        <div className={cn(!shouldCenter && 'flex-1')}>
+          {displayMessages.map((message) => (
+            <MessageBubble key={message.id} message={message} />
+          ))}
 
-        <div ref={bottomRef} />
+          {/* Streaming/Thinking indicator - shown while waiting for or receiving response */}
+          {isStreaming && (
+            <div className="group flex gap-3 px-4 py-3 bg-accent/30 border-l-2 border-primary">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20">
+                <Bot className="h-4 w-4 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-xs font-medium text-primary">Assistant</span>
+                  {streamingContent ? (
+                    <span className="text-xs text-muted-foreground">typing...</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground animate-pulse">thinking...</span>
+                  )}
+                </div>
+                <div className="text-sm">
+                  {streamingContent ? (
+                    /* Show streaming content as plain text for performance, then render markdown */
+                    <StreamingContent content={streamingContent} />
+                  ) : (
+                    /* Thinking animation while waiting for first token */
+                    <ThinkingAnimation />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom spacer - ensures content doesn't sit against input */}
+        <div className={cn('shrink-0', shouldCenter ? 'flex-1 min-h-16' : 'h-4')} />
       </div>
     </TextSelectionContextMenu>
+  )
+}
+
+/**
+ * Streaming content display - shows text as it arrives
+ * Uses simpler rendering for performance during streaming
+ */
+function StreamingContent({ content }: { content: string }) {
+  return (
+    <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap">
+      {content}
+      <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-0.5" />
+    </div>
   )
 }
 
