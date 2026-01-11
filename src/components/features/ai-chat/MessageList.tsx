@@ -13,7 +13,6 @@ interface MessageListProps {
   messages: Message[]
   streamingContent?: string
   isStreaming?: boolean
-  streamingEnabled?: boolean
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -154,13 +153,16 @@ function MessageBubble({ message }: { message: Message }) {
   )
 }
 
-export function MessageList({ messages, streamingContent, isStreaming, streamingEnabled = true }: MessageListProps) {
+export function MessageList({ messages, streamingContent, isStreaming }: MessageListProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or streaming updates
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingContent])
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+    }
+  }, [messages, streamingContent, isStreaming])
 
   if (messages.length === 0 && !isStreaming) {
     return (
@@ -176,67 +178,71 @@ export function MessageList({ messages, streamingContent, isStreaming, streaming
     )
   }
 
+  // Filter out the empty assistant message placeholder when streaming
+  // (the streaming content will be shown in the streaming bubble instead)
+  const displayMessages = isStreaming
+    ? messages.filter((m, i) => !(i === messages.length - 1 && m.role === 'assistant' && m.content === ''))
+    : messages
+
   return (
     <TextSelectionContextMenu>
-      <div className="flex-1 overflow-y-auto">
-        {messages.map((message) => (
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+        {displayMessages.map((message) => (
           <MessageBubble key={message.id} message={message} />
         ))}
 
-      {/* Streaming message */}
-      {isStreaming && streamingContent && (
-        <div className="group flex gap-3 px-4 py-3">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-            <Bot className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center gap-2">
-              <span className="text-xs font-medium">Assistant</span>
-              <span className="text-xs text-muted-foreground">typing...</span>
+        {/* Streaming/Thinking indicator - shown while waiting for or receiving response */}
+        {isStreaming && (
+          <div className="group flex gap-3 px-4 py-3">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+              <Bot className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="text-sm">
-              <MessageContent content={streamingContent} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Thinking indicator - shown when streaming hasn't started or in non-streaming mode */}
-      {isStreaming && !streamingContent && (
-        <div className="flex gap-3 px-4 py-3">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-            <Bot className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <div className="mb-1 flex items-center gap-2">
-              <span className="text-xs font-medium">Assistant</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {streamingEnabled ? (
-                /* Streaming mode - bouncing dots */
-                <div className="flex items-center gap-1">
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground" />
-                </div>
-              ) : (
-                /* Non-streaming mode - thinking text animation */
-                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <span className="animate-pulse">Thinking</span>
-                  <span className="inline-flex">
-                    <span className="animate-[bounce_1s_ease-in-out_infinite]">.</span>
-                    <span className="animate-[bounce_1s_ease-in-out_0.2s_infinite]">.</span>
-                    <span className="animate-[bounce_1s_ease-in-out_0.4s_infinite]">.</span>
-                  </span>
-                </div>
-              )}
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="text-xs font-medium">Assistant</span>
+                {streamingContent && (
+                  <span className="text-xs text-muted-foreground">typing...</span>
+                )}
+              </div>
+              <div className="text-sm">
+                {streamingContent ? (
+                  /* Show streaming content as it arrives */
+                  <MessageContent content={streamingContent} />
+                ) : (
+                  /* Thinking animation while waiting for first token */
+                  <ThinkingAnimation />
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
         <div ref={bottomRef} />
       </div>
     </TextSelectionContextMenu>
+  )
+}
+
+/**
+ * Animated thinking indicator with shifting dots
+ */
+function ThinkingAnimation() {
+  return (
+    <div className="flex items-center gap-1 text-muted-foreground py-1">
+      <span className="text-sm font-medium animate-pulse">Thinking</span>
+      <span className="inline-flex w-6">
+        <span className="animate-[thinking_1.4s_ease-in-out_infinite]">.</span>
+        <span className="animate-[thinking_1.4s_ease-in-out_0.2s_infinite]">.</span>
+        <span className="animate-[thinking_1.4s_ease-in-out_0.4s_infinite]">.</span>
+      </span>
+      <style>{`
+        @keyframes thinking {
+          0%, 20% { opacity: 0; }
+          40% { opacity: 1; }
+          60% { opacity: 1; }
+          80%, 100% { opacity: 0; }
+        }
+      `}</style>
+    </div>
   )
 }

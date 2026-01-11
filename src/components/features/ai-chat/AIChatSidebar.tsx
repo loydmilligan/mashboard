@@ -214,7 +214,6 @@ export function AIChatSidebar() {
           messages={conversation?.messages || []}
           streamingContent={streamingContent}
           isStreaming={isStreaming}
-          streamingEnabled={streamingEnabled}
         />
 
         {/* Input */}
