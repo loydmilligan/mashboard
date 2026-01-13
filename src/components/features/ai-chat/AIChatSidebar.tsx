@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, Zap } from 'lucide-react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Button } from '@/components/ui/button'
@@ -18,11 +18,13 @@ export function AIChatSidebar() {
     activeConversation,
     isStreaming,
     streamingContent,
+    reasoningContent,
     error,
     createConversation,
     addMessage,
     setStreaming,
     appendStreamingContent,
+    appendReasoningContent,
     commitStreamingContent,
     setError,
     clearConversations,
@@ -38,6 +40,35 @@ export function AIChatSidebar() {
   const streamingEnabled = localStreamingEnabled ?? defaultStreamingEnabled
 
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Batched streaming update refs - accumulate chunks and flush periodically
+  // This prevents excessive re-renders that can freeze the browser
+  const streamingBufferRef = useRef<string>('')
+  const reasoningBufferRef = useRef<string>('')
+  const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const FLUSH_INTERVAL_MS = 50 // Update UI at most 20 times per second
+
+  // Flush buffers to state
+  const flushBuffers = useCallback(() => {
+    if (streamingBufferRef.current) {
+      appendStreamingContent(streamingBufferRef.current)
+      streamingBufferRef.current = ''
+    }
+    if (reasoningBufferRef.current) {
+      appendReasoningContent(reasoningBufferRef.current)
+      reasoningBufferRef.current = ''
+    }
+  }, [appendStreamingContent, appendReasoningContent])
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (flushIntervalRef.current) {
+        clearInterval(flushIntervalRef.current)
+      }
+    }
+  }, [])
+
   const conversation = activeConversation()
 
   const handleSend = useCallback(
@@ -71,13 +102,37 @@ export function AIChatSidebar() {
         ]
 
         if (streamingEnabled) {
-          // Streaming mode
-          let fullContent = ''
-          for await (const chunk of openRouterService.streamChat(messages, conv.model)) {
-            if (abortControllerRef.current?.signal.aborted) break
-            fullContent += chunk
-            appendStreamingContent(chunk)
+          // Streaming mode - handles both regular and reasoning models
+          // Use batched updates to prevent browser freeze from excessive re-renders
+
+          // Start flush interval for batched UI updates
+          flushIntervalRef.current = setInterval(flushBuffers, FLUSH_INTERVAL_MS)
+
+          try {
+            for await (const chunk of openRouterService.streamChat(messages, conv.model)) {
+              if (abortControllerRef.current?.signal.aborted) {
+                break
+              }
+
+              if (chunk.type === 'reasoning') {
+                // Model is thinking - buffer reasoning content
+                reasoningBufferRef.current += chunk.text
+              } else if (chunk.type === 'content') {
+                // Model is outputting actual response - buffer content
+                streamingBufferRef.current += chunk.text
+              }
+            }
+
+            // Final flush to ensure all buffered content is displayed
+            flushBuffers()
+          } finally {
+            // Stop the flush interval
+            if (flushIntervalRef.current) {
+              clearInterval(flushIntervalRef.current)
+              flushIntervalRef.current = null
+            }
           }
+
           // Commit the streaming content to the message
           commitStreamingContent()
         } else {
@@ -100,19 +155,29 @@ export function AIChatSidebar() {
       createConversation,
       addMessage,
       setStreaming,
-      appendStreamingContent,
       commitStreamingContent,
       setError,
       streamingEnabled,
       updateLastMessage,
+      flushBuffers,
     ]
   )
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort()
+    // Stop the flush interval
+    if (flushIntervalRef.current) {
+      clearInterval(flushIntervalRef.current)
+      flushIntervalRef.current = null
+    }
+    // Flush any remaining buffered content
+    flushBuffers()
+    // Clear buffers
+    streamingBufferRef.current = ''
+    reasoningBufferRef.current = ''
     commitStreamingContent()
     setStreaming(false)
-  }, [commitStreamingContent, setStreaming])
+  }, [commitStreamingContent, setStreaming, flushBuffers])
 
   const handleModelChange = useCallback(
     (model: string) => {
@@ -213,6 +278,7 @@ export function AIChatSidebar() {
         <MessageList
           messages={conversation?.messages || []}
           streamingContent={streamingContent}
+          reasoningContent={reasoningContent}
           isStreaming={isStreaming}
         />
 

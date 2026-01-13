@@ -1,4 +1,4 @@
-import type { ChatCompletionRequest, ChatCompletionChunk } from '@/types/chat'
+import type { ChatCompletionRequest, ChatCompletionChunk, StreamChunk } from '@/types/chat'
 import { useSettingsStore } from '@/stores/settingsStore'
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1'
@@ -21,7 +21,7 @@ export class OpenRouterService {
     messages: ChatCompletionRequest['messages'],
     model: string,
     options?: Partial<ChatCompletionRequest>
-  ): AsyncGenerator<string, void, unknown> {
+  ): AsyncGenerator<StreamChunk, void, unknown> {
     const apiKey = this.getApiKey()
     if (!apiKey) {
       throw new Error('OpenRouter API key not configured. Please add it in Settings.')
@@ -54,7 +54,10 @@ export class OpenRouterService {
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+
+        if (done) {
+          break
+        }
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
@@ -62,19 +65,33 @@ export class OpenRouterService {
 
         for (const line of lines) {
           const trimmed = line.trim()
-          if (!trimmed || !trimmed.startsWith('data: ')) continue
+
+          if (!trimmed || !trimmed.startsWith('data: ')) {
+            continue
+          }
 
           const data = trimmed.slice(6)
-          if (data === '[DONE]') return
+          if (data === '[DONE]') {
+            return
+          }
 
           try {
             const parsed: ChatCompletionChunk = JSON.parse(data)
-            const content = parsed.choices?.[0]?.delta?.content
+            const delta = parsed.choices?.[0]?.delta
+
+            // Handle reasoning tokens (for reasoning models like o1, DeepSeek, GLM-4)
+            const reasoning = delta?.reasoning
+            if (reasoning) {
+              yield { type: 'reasoning', text: reasoning }
+            }
+
+            // Handle content tokens
+            const content = delta?.content
             if (content) {
-              yield content
+              yield { type: 'content', text: content }
             }
           } catch {
-            // Skip invalid JSON lines
+            // Skip unparseable data
           }
         }
       }

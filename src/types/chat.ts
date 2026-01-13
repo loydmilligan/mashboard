@@ -32,11 +32,21 @@ export interface ChatCompletionChunk {
     delta: {
       content?: string
       role?: string
+      reasoning?: string
+      reasoning_details?: Array<{ type: string; summary?: string; id?: string }>
     }
     finish_reason: string | null
     index: number
   }>
   model: string
+}
+
+/**
+ * Streaming chunk types for differentiating reasoning vs content
+ */
+export interface StreamChunk {
+  type: 'reasoning' | 'content'
+  text: string
 }
 
 // Note: Model configuration is now stored in the database and managed via modelsStore

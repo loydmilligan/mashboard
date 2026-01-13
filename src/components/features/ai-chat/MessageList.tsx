@@ -12,6 +12,7 @@ import type { Message } from '@/types/chat'
 interface MessageListProps {
   messages: Message[]
   streamingContent?: string
+  reasoningContent?: string
   isStreaming?: boolean
 }
 
@@ -153,7 +154,7 @@ function MessageBubble({ message }: { message: Message }) {
   )
 }
 
-export function MessageList({ messages, streamingContent, isStreaming }: MessageListProps) {
+export function MessageList({ messages, streamingContent, reasoningContent, isStreaming }: MessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll when new content arrives
@@ -161,7 +162,7 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
     }
-  }, [messages, streamingContent, isStreaming])
+  }, [messages, streamingContent, reasoningContent, isStreaming])
 
   if (messages.length === 0 && !isStreaming) {
     return (
@@ -210,14 +211,19 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
                   <span className="text-xs font-medium text-primary">Assistant</span>
                   {streamingContent ? (
                     <span className="text-xs text-muted-foreground">typing...</span>
+                  ) : reasoningContent ? (
+                    <span className="text-xs text-yellow-500 animate-pulse">reasoning...</span>
                   ) : (
                     <span className="text-xs text-muted-foreground animate-pulse">thinking...</span>
                   )}
                 </div>
                 <div className="text-sm">
                   {streamingContent ? (
-                    /* Show streaming content as plain text for performance, then render markdown */
+                    /* Show streaming content as it arrives */
                     <StreamingContent content={streamingContent} />
+                  ) : reasoningContent ? (
+                    /* Show reasoning content while model is thinking */
+                    <ReasoningContent content={reasoningContent} />
                   ) : (
                     /* Thinking animation while waiting for first token */
                     <ThinkingAnimation />
@@ -244,6 +250,43 @@ function StreamingContent({ content }: { content: string }) {
     <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap">
       {content}
       <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-0.5" />
+    </div>
+  )
+}
+
+/**
+ * Reasoning content display - shows model's thinking process
+ * Displayed in a collapsible format with distinct styling
+ */
+function ReasoningContent({ content }: { content: string }) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const previewLength = 150
+
+  // Show truncated preview or full content
+  const displayContent = isExpanded ? content : content.slice(0, previewLength)
+  const hasMore = content.length > previewLength
+
+  return (
+    <div className="space-y-1">
+      <div
+        className={cn(
+          'text-xs text-yellow-500/80 bg-yellow-500/10 rounded px-2 py-1.5 font-mono',
+          'whitespace-pre-wrap break-words',
+          !isExpanded && hasMore && 'line-clamp-3'
+        )}
+      >
+        {displayContent}
+        {!isExpanded && hasMore && '...'}
+        <span className="inline-block w-1.5 h-3 bg-yellow-500/50 animate-pulse ml-0.5" />
+      </div>
+      {hasMore && (
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-xs text-yellow-500/60 hover:text-yellow-500 transition-colors"
+        >
+          {isExpanded ? '▲ Show less' : '▼ Show more thinking'}
+        </button>
+      )}
     </div>
   )
 }

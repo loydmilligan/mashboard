@@ -13,6 +13,7 @@ interface ChatState {
   activeConversationId: string | null
   isStreaming: boolean
   streamingContent: string
+  reasoningContent: string  // For reasoning models that stream their thinking
   error: string | null
 
   // Getters
@@ -31,6 +32,7 @@ interface ChatState {
   setStreaming: (streaming: boolean) => void
   setStreamingContent: (content: string) => void
   appendStreamingContent: (content: string) => void
+  appendReasoningContent: (content: string) => void
   commitStreamingContent: () => void
 
   setError: (error: string | null) => void
@@ -43,6 +45,7 @@ export const useChatStore = create<ChatState>()(
       activeConversationId: null,
       isStreaming: false,
       streamingContent: '',
+      reasoningContent: '',
       error: null,
 
       activeConversation: () => {
@@ -168,7 +171,7 @@ export const useChatStore = create<ChatState>()(
       setStreaming: (streaming) => {
         set({ isStreaming: streaming })
         if (!streaming) {
-          set({ streamingContent: '' })
+          set({ streamingContent: '', reasoningContent: '' })
         }
       },
 
@@ -182,6 +185,12 @@ export const useChatStore = create<ChatState>()(
         }))
       },
 
+      appendReasoningContent: (content) => {
+        set((state) => ({
+          reasoningContent: state.reasoningContent + content,
+        }))
+      },
+
       commitStreamingContent: () => {
         const state = get()
         if (state.streamingContent) {
@@ -191,7 +200,12 @@ export const useChatStore = create<ChatState>()(
       },
 
       setError: (error) => {
-        set({ error, isStreaming: false })
+        // Only stop streaming if there's actually an error
+        if (error) {
+          set({ error, isStreaming: false })
+        } else {
+          set({ error })
+        }
       },
     }),
     {

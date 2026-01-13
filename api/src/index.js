@@ -1125,7 +1125,9 @@ app.get('/models/lookup/:modelId(*)', async (req, res) => {
       pricing_prompt: model.pricing?.prompt || null,
       pricing_completion: model.pricing?.completion || null,
       pricing_image: model.pricing?.image || null,
-      supports_streaming: model.supported_parameters?.includes('stream') ?? true,
+      // OpenRouter doesn't always list 'stream' in supported_parameters even when streaming works
+      // Default to true, only disable for known non-streaming models (like o1 reasoning models)
+      supports_streaming: model.id?.includes('/o1') ? false : true,
       supports_deep_reasoning: model.supported_parameters?.includes('reasoning') ?? false,
     }
 
