@@ -1,63 +1,78 @@
 # Mashb0ard
 
+> **Version:** 0.10.0
+> **Last Updated:** 2025-01-12
 > A personal browser dashboard and command center for self-hosted environments
 
 ## Overview
 
 Mashb0ard is a keyboard-driven new tab replacement that consolidates daily tools into one workspace. It's a desktop-first React SPA with embedded service integrations, designed for power users who self-host their services.
 
+**Key Highlights:**
+- Split-pane layout with tabbed content area
+- AI chat with streaming support (OpenRouter)
+- Full task management (Vikunja) with resource attachments
+- Pomodoro timer with task claiming
+- Habits tracking with streaks
+- Embedded services: SSH terminal, code snippets, search, notes, container logs
+
+---
+
 ## Features
 
-### Core Features
-- **Split Layout**: 40/60 draggable split with left panel (tools, links, dashboard) and right content area (tabbed apps)
-- **Resizable Sidebars**: Drag-to-resize AI chat and notes sidebars
-- **Integrated Apps**: Termix (SSH), ByteStash (snippets), SearXNG (search) as embedded tabs
-- **AI Chat**: OpenRouter-powered chat sidebar with model selection, streaming toggle, and thinking animations
-- **Notes**: Dumbpad for quick notes + NoteMark for full markdown notebooks
-- **Workflows**: Quick-launch URL groups (macros)
-- **Quick Links**: Organized link groups with collapsible sections
+### Layout & Navigation
+- **Split Layout**: Draggable 40/60 split with left panel (tools, links, dashboard) and right content area
+- **Resizable Sidebars**: Drag-to-resize AI chat and notes sidebars with auto-hide
+- **Content Tabs**: Tabbed interface for Termix, ByteStash, SearXNG, and dynamic viewer apps
 - **Command Palette**: Keyboard-driven actions (`Cmd+K`)
-- **Dark/Light Theme**: System-aware theming
+- **Dark/Light Theme**: System-aware theming with manual toggle
+
+### AI Chat
+- **OpenRouter Integration**: Access 100+ AI models through single API
+- **Streaming Responses**: Real-time token streaming with batched updates
+- **Reasoning Models**: Support for models with thinking tokens (o1, DeepSeek, GLM-4)
+- **Model Selector**: Quick model switching with favorites and metadata
+- **Conversation Management**: Multiple conversations with history
 
 ### Task Management
-- **Vikunja Integration**: Full task management with priorities, due dates, and projects
-- **Pomodoro Timer**: Built-in timer in header with task claiming
-- **Task Resources**: Attach resources to tasks that auto-open when claimed:
+- **Vikunja Integration**: Full task CRUD with priorities, due dates, and projects
+- **Task Resources**: Attach resources that auto-open when task is claimed:
   - Web links (iframe embeds)
   - YouTube videos
   - Files (images, PDFs, code, audio, spreadsheets)
   - NoteMark notes
   - SSH connections (Termix)
+- **Pomodoro Timer**: Built-in timer in header with task claiming workflow
 
 ### Productivity Tools
-- **Container Logs**: Dozzle integration for viewing Docker container logs
-- **Code Snippets**: ByteStash for storing and organizing code snippets
-- **Search**: SearXNG privacy-respecting search with results opening in new tabs
-- **Habits Tracker**: Track daily habits with streaks and statistics
+- **Notes**: Dumbpad for quick notes + NoteMark for full markdown notebooks
+- **Code Snippets**: ByteStash integration for storing and organizing code
+- **Search**: SearXNG privacy-respecting metasearch
+- **Container Logs**: Dozzle integration for Docker log viewing
+- **Habits Tracker**: Daily habits with streaks and statistics
+- **Workflows**: Quick-launch URL groups (macros)
+- **Quick Links**: Organized link groups with collapsible sections
 
-## Screenshots
-
-![Mashb0ard UI](token_screen.png)
+---
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Framework | React 18 + TypeScript |
-| Build | Vite |
-| Styling | Tailwind CSS |
-| Components | shadcn/ui (Radix primitives) |
-| State | Zustand (with persist middleware) |
-| Icons | Lucide React |
-| Deployment | Docker + nginx reverse proxy |
+| **Frontend** | React 18 + TypeScript |
+| **Build** | Vite |
+| **Styling** | Tailwind CSS |
+| **Components** | shadcn/ui (Radix primitives) |
+| **State** | Zustand (with persist middleware) |
+| **Icons** | Lucide React |
+| **Backend** | Node.js/Express + PostgreSQL |
+| **Deployment** | Docker + nginx reverse proxy |
 
 ---
 
-## Deployment
+## Quick Start
 
-### Quick Start (Docker - Recommended)
-
-The easiest way to run Mashb0ard with all integrated services:
+### Docker Deployment (Recommended)
 
 ```bash
 # 1. Clone the repository
@@ -66,117 +81,46 @@ cd mashboard
 
 # 2. Copy and configure environment variables
 cp docker/.env.example docker/.env
-# Edit docker/.env with your preferred settings
+# Edit docker/.env with your settings
 
 # 3. Build and start all services
-docker compose -f docker/docker-compose.proxy.yml up -d --build
+cd docker
+docker compose -f docker-compose.proxy.yml up -d --build
 
 # 4. Access Mashb0ard
 open http://localhost:3000
 ```
 
-### What Gets Deployed
-
-The Docker setup includes:
+### Services Included
 
 | Service | URL | Description |
 |---------|-----|-------------|
 | **Mashb0ard** | http://localhost:3000 | Main dashboard |
-| **Mashboard API** | http://localhost:3000/api/mashboard/ | Backend API (habits, task resources) |
-| **Vikunja** | http://localhost:3000/vikunja/ | Task management (API at /api/vikunja/) |
-| **NoteMark** | http://localhost:3000/notemark/ | Markdown notebooks (API at /api/notemark/) |
-| **Dumbpad** | http://localhost:3000/dumbpad/ | Quick notes (embedded in sidebar) |
-| **Termix** | http://localhost:3000/termix/ | SSH terminal (content tab) |
-| **ByteStash** | http://localhost:3000/bytestash/ | Code snippets (content tab) |
-| **SearXNG** | http://localhost:3000/searxng/ | Privacy search (content tab) |
-| **Dozzle** | http://localhost:3000/dozzle/ | Docker container logs |
+| **Mashboard API** | /api/mashboard/ | Backend (habits, settings, task resources) |
+| **Vikunja** | /api/vikunja/ | Task management API |
+| **NoteMark** | /api/notemark/ | Markdown notebooks API |
+| **Dumbpad** | /dumbpad/ | Quick notes (iframe) |
+| **Termix** | /termix/ | SSH terminal (iframe) |
+| **ByteStash** | /bytestash/ | Code snippets (iframe) |
+| **SearXNG** | /searxng/ | Privacy search (iframe) |
+| **Dozzle** | /dozzle/ | Docker container logs |
 
 ### Initial Configuration
 
-After deployment, open Settings (`Cmd+,` or click gear icon) and configure:
+After deployment, open Settings (`Cmd+,`) and configure:
 
-**API Keys Tab:**
-| Setting | Value |
-|---------|-------|
-| OpenRouter API Key | Your key from [openrouter.ai/keys](https://openrouter.ai/keys) |
-| Vikunja API URL | `/api/vikunja` |
-| Vikunja API Token | Generate in Vikunja Settings → API Tokens |
-| Vikunja Iframe URL | `/vikunja` |
-| Dumbpad Base URL | `/dumbpad` |
-| Termix Iframe URL | `/termix` |
-| Termix API Base URL | `/api/termix` |
-| Termix JWT Token | Copy from Termix (F12 → Application → Cookies → `jwt`) |
-| NoteMark API URL | `/api/notemark` |
-| NoteMark Iframe URL | `/notemark` |
-| ByteStash URL | `/bytestash` |
-| SearXNG URL | `/searxng` |
+1. **OpenRouter API Key** - Get from [openrouter.ai/keys](https://openrouter.ai/keys)
+2. **Vikunja Token** - Generate in Vikunja Settings → API Tokens
+3. **Termix JWT** - Copy from Termix cookies after login
+4. **NoteMark Token** - Get from NoteMark settings
 
-### Environment Variables
-
-Key variables in `docker/.env`:
-
-```bash
-# General
-PORT=3000                              # Port to expose
-EXTERNAL_URL=http://localhost:3000     # Your domain (for callbacks)
-
-# Vikunja
-VIKUNJA_SERVICE_JWTSECRET=change-me    # JWT secret (CHANGE THIS!)
-VIKUNJA_SERVICE_FRONTENDURL=http://localhost:3000/vikunja
-
-# NoteMark
-NOTEMARK_DATA_DIRECTORY=/data          # Data storage path
-
-# Dumbpad
-DUMBPAD_PIN=                           # Optional PIN protection
-DUMBPAD_TITLE=Notes                    # Tab title
-
-# Termix
-TERMIX_SALT=change-me-to-random        # Encryption salt (CHANGE THIS!)
-
-# ByteStash
-BYTESTASH_JWT_SECRET=change-me         # JWT secret (CHANGE THIS!)
-BYTESTASH_ALLOW_NEW_ACCOUNTS=true      # Allow registrations
-
-# SearXNG
-SEARXNG_INSTANCE_NAME=Mashb0ard Search # Instance name
-```
-
-### Production Deployment
-
-For production with a custom domain:
-
-```bash
-# 1. Update EXTERNAL_URL in docker/.env
-EXTERNAL_URL=https://dashboard.yourdomain.com
-
-# 2. Use a reverse proxy (Traefik, Caddy, nginx) in front
-# Example with Traefik labels in docker-compose
-
-# 3. Update service BASE_URLs to match your domain
-```
-
-### Updating
-
-```bash
-cd mashboard
-git pull
-docker compose -f docker/docker-compose.proxy.yml up -d --build
-```
-
-### Stopping
-
-```bash
-docker compose -f docker/docker-compose.proxy.yml down
-# Add -v to also remove volumes (data)
-```
+Service URLs are pre-configured for the Docker proxy setup.
 
 ---
 
 ## Development
 
 ### Prerequisites
-
 - Node.js 18+
 - npm or pnpm
 
@@ -186,31 +130,49 @@ docker compose -f docker/docker-compose.proxy.yml down
 # Install dependencies
 npm install
 
-# Start dev server
+# Start frontend dev server
 npm run dev
 # Opens at http://localhost:5173
+
+# Start API server (separate terminal)
+cd api && npm install && npm start
+# API at http://localhost:3001
 
 # Build for production
 npm run build
 
-# Preview production build
-npm run preview
+# Type checking
+npm run typecheck
 ```
 
 ### Project Structure
 
 ```
-src/
-├── components/
-│   ├── features/      # Feature components (ai-chat, notes, search, etc.)
-│   ├── layout/        # Layout components (Header, SplitLayout, panels)
-│   ├── shared/        # Shared components (ServiceIframe)
-│   └── ui/            # shadcn/ui components
-├── hooks/             # Custom React hooks
-├── stores/            # Zustand stores
-├── services/          # API clients (OpenRouter, Termix)
-├── types/             # TypeScript definitions
-└── lib/               # Utilities (cn, constants)
+mashboard/
+├── api/                 # Backend API (Express + PostgreSQL)
+│   └── src/index.js     # API routes
+├── docker/              # Docker configs and nginx proxy
+│   ├── docker-compose.proxy.yml
+│   ├── Dockerfile.proxy
+│   └── nginx.proxy.template.conf
+├── src/
+│   ├── components/
+│   │   ├── features/    # Feature modules
+│   │   │   ├── ai-chat/
+│   │   │   ├── tasks/
+│   │   │   ├── habits/
+│   │   │   ├── notes/
+│   │   │   ├── pomodoro/
+│   │   │   └── ...
+│   │   ├── layout/      # Layout components
+│   │   ├── shared/      # Shared components
+│   │   └── ui/          # shadcn/ui components
+│   ├── hooks/           # Custom React hooks
+│   ├── stores/          # Zustand stores
+│   ├── services/        # API clients
+│   ├── types/           # TypeScript definitions
+│   └── lib/             # Utilities
+└── docs/                # Documentation
 ```
 
 ---
@@ -231,60 +193,48 @@ src/
 
 ## Architecture
 
+### Data Storage
+
+| Data | Storage | Location |
+|------|---------|----------|
+| Settings | PostgreSQL | `mashboard-api` |
+| Habits | PostgreSQL | `mashboard-api` |
+| Task Resources | PostgreSQL | `mashboard-api` |
+| AI Models | PostgreSQL | `mashboard-api` |
+| Chat History | localStorage | Browser |
+| UI State | localStorage | Browser |
+
 ### Services Integration
 
-All services run behind an nginx reverse proxy on the same origin, which:
+All services run behind nginx reverse proxy on same origin:
 - Solves third-party cookie issues for iframe embedding
-- Provides unified access through a single port
+- Provides unified access through single port
 - Handles WebSocket upgrades for real-time features
-
-### State Management
-
-- **Zustand** stores with `persist` middleware for localStorage
-- Automatic state rehydration on page load
-- Separate stores for: settings, UI, content tabs, workflows, chat
-
-### Security Notes
-
-- API keys stored in browser localStorage (acceptable for single-user self-hosted)
-- Services should be behind authentication if exposed to internet
-- Change default salts/secrets in production
 
 ---
 
 ## Documentation
 
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Technical architecture details
 - [CLAUDE.md](CLAUDE.md) - AI assistant instructions
-- [DESIGN.md](DESIGN.md) - Design philosophy
-- [FEATURES.md](FEATURES.md) - Feature specifications
+- [CHANGELOG.md](CHANGELOG.md) - Version history
 
 ---
 
 ## Troubleshooting
 
 ### Services not loading in tabs
-
-1. Check service URLs in Settings match the proxy paths
-2. Verify services are running: `docker compose -f docker/docker-compose.proxy.yml ps`
+1. Check service URLs in Settings match proxy paths
+2. Verify services are running: `docker compose ps`
 3. Check nginx logs: `docker logs mashb0ard`
 
-### Termix authentication issues
+### Settings not persisting
+1. Ensure mashboard-api container is running and healthy
+2. Check API health: `curl http://localhost:3000/api/mashboard/health`
+3. Verify PostgreSQL is up: `docker logs mashb0ard-postgres`
 
-1. Termix requires a JWT token for API calls
-2. Open Termix directly (`/termix/`), log in
-3. Copy the `jwt` cookie value to Settings
-
-### Dumbpad buttons not working
-
-This is usually a path issue. Ensure:
-- Dumbpad URL is set to `/dumbpad` (not `/dumbpad/`)
-- The nginx proxy is correctly routing `/js/`, `/css/`, `/api/` paths
-
-### SearXNG not loading
-
-1. First-time setup takes a moment to initialize
-2. Check container logs: `docker logs searxng`
-3. Verify `/searxng/` is accessible directly
+### AI streaming freezing browser
+This was fixed in v0.10.0 with batched state updates. Ensure you're running the latest version.
 
 ---
 
