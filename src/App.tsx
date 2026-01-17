@@ -8,6 +8,7 @@ import { NotesSidebar } from '@/components/features/notes/NotesSidebar'
 import { LogsPanel } from '@/components/layout/LogsPanel'
 import { SettingsDialog } from '@/components/features/settings/SettingsDialog'
 import { CommandPalette } from '@/components/features/command-palette/CommandPalette'
+import { MusicLeagueDrawer } from '@/components/features/music-league/MusicLeagueDrawer'
 import { GlobalKeyboardShortcuts } from '@/components/features/keyboard-shortcuts/GlobalKeyboardShortcuts'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -57,6 +58,7 @@ function App() {
       {/* Modals */}
       <SettingsDialog />
       <CommandPalette />
+      <MusicLeagueDrawer />
 
       {/* Slide-up Panels */}
       <LogsPanel />

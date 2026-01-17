@@ -24,6 +24,7 @@ interface UIState {
   commandPaletteOpen: boolean
   settingsOpen: boolean
   snippetsPopoverOpen: boolean
+  musicLeagueDrawerOpen: boolean
 
   // Actions
   toggleAiSidebar: () => void
@@ -40,6 +41,8 @@ interface UIState {
   setCommandPaletteOpen: (open: boolean) => void
   setSettingsOpen: (open: boolean) => void
   setSnippetsPopoverOpen: (open: boolean) => void
+  setMusicLeagueDrawerOpen: (open: boolean) => void
+  toggleMusicLeagueDrawer: () => void
   closeAllOverlays: () => void
 }
 
@@ -59,6 +62,7 @@ export const useUIStore = create<UIState>()(
       commandPaletteOpen: false,
       settingsOpen: false,
       snippetsPopoverOpen: false,
+      musicLeagueDrawerOpen: false,
 
       // Actions
       toggleAiSidebar: () => set((state) => ({ aiSidebarOpen: !state.aiSidebarOpen })),
@@ -75,12 +79,15 @@ export const useUIStore = create<UIState>()(
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       setSnippetsPopoverOpen: (open) => set({ snippetsPopoverOpen: open }),
+      setMusicLeagueDrawerOpen: (open) => set({ musicLeagueDrawerOpen: open }),
+      toggleMusicLeagueDrawer: () => set((state) => ({ musicLeagueDrawerOpen: !state.musicLeagueDrawerOpen })),
       closeAllOverlays: () =>
         set({
           commandPaletteOpen: false,
           settingsOpen: false,
           snippetsPopoverOpen: false,
           pomodoroExpanded: false,
+          musicLeagueDrawerOpen: false,
         }),
     }),
     {

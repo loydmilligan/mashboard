@@ -6,6 +6,7 @@ import {
   Settings,
   HelpCircle,
   ScrollText,
+  Music2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/stores/uiStore'
@@ -30,6 +31,7 @@ export function Header() {
     toggleAiSidebar,
     toggleNotesSidebar,
     toggleLogsPanel,
+    toggleMusicLeagueDrawer,
     setSettingsOpen,
     pomodoroExpanded,
     setPomodoroExpanded,
@@ -47,11 +49,21 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-4">
-      {/* Left section: Logo and AI toggle */}
+      {/* Left section: Logo, Music League, and AI toggle */}
       <div className="flex items-center gap-3">
         <h1 className="text-xl font-semibold tracking-tight">{APP_NAME}</h1>
 
         <div className="h-6 w-px bg-border" />
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleMusicLeagueDrawer}
+          aria-label="Music League Strategist"
+          title="Music League Strategist"
+        >
+          <Music2 className="h-4 w-4" />
+        </Button>
 
         <Button
           variant="ghost"
