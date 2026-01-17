@@ -26,6 +26,22 @@ interface DozzleConfig {
   baseUrl: string // URL for Dozzle (e.g., /dozzle)
 }
 
+interface BetterBrainConfig {
+  baseUrl: string // API URL (e.g., /api/betterbrain or http://192.168.5.255:8002)
+}
+
+interface YouTubeMusicConfig {
+  clientId: string
+  clientSecret: string
+  refreshToken: string
+}
+
+interface SpotifyConfig {
+  clientId: string
+  clientSecret: string
+  refreshToken: string
+}
+
 interface VikunjaConfig {
   baseUrl: string // API URL (e.g., /api/vikunja)
   token: string // API token (starts with tk_)
@@ -79,6 +95,7 @@ interface ServicesEnabled {
   dozzle: boolean
   vikunja: boolean
   notemark: boolean
+  betterBrain: boolean
 }
 
 interface SettingsState {
@@ -96,6 +113,9 @@ interface SettingsState {
   dozzle: DozzleConfig
   vikunja: VikunjaConfig
   notemark: NoteMarkConfig
+  betterBrain: BetterBrainConfig
+  youtubeMusic: YouTubeMusicConfig
+  spotify: SpotifyConfig
 
   // Services enabled/disabled
   servicesEnabled: ServicesEnabled
@@ -120,6 +140,9 @@ interface SettingsState {
   setDozzleConfig: (config: Partial<DozzleConfig>) => void
   setVikunjaConfig: (config: Partial<VikunjaConfig>) => void
   setNoteMarkConfig: (config: Partial<NoteMarkConfig>) => void
+  setBetterBrainConfig: (config: Partial<BetterBrainConfig>) => void
+  setYouTubeMusicConfig: (config: Partial<YouTubeMusicConfig>) => void
+  setSpotifyConfig: (config: Partial<SpotifyConfig>) => void
   setServicesEnabled: (services: Partial<ServicesEnabled>) => void
   setAIPreferences: (prefs: Partial<AIPreferences>) => void
   setAppearance: (settings: Partial<AppearanceSettings>) => void
@@ -148,6 +171,19 @@ const defaultSettings = {
   },
   dozzle: {
     baseUrl: '/dozzle',
+  },
+  betterBrain: {
+    baseUrl: '/api/betterbrain',
+  },
+  youtubeMusic: {
+    clientId: '',
+    clientSecret: '',
+    refreshToken: '',
+  },
+  spotify: {
+    clientId: '',
+    clientSecret: '',
+    refreshToken: '',
   },
   vikunja: {
     baseUrl: '/api/vikunja',
@@ -198,6 +234,7 @@ const defaultSettings = {
     dozzle: true,
     vikunja: true,
     notemark: true,
+    betterBrain: true,
   },
 }
 
@@ -220,6 +257,9 @@ const getSettingsData = (state: SettingsState) => ({
   dozzle: state.dozzle,
   vikunja: state.vikunja,
   notemark: state.notemark,
+  betterBrain: state.betterBrain,
+  youtubeMusic: state.youtubeMusic,
+  spotify: state.spotify,
   ai: state.ai,
   appearance: state.appearance,
   panelTimeouts: state.panelTimeouts,
@@ -250,6 +290,9 @@ export const useSettingsStore = create<SettingsState>()(
           dozzle: { ...defaultSettings.dozzle, ...serverSettings.dozzle },
           vikunja: { ...defaultSettings.vikunja, ...serverSettings.vikunja },
           notemark: { ...defaultSettings.notemark, ...serverSettings.notemark },
+          betterBrain: { ...defaultSettings.betterBrain, ...serverSettings.betterBrain },
+          youtubeMusic: { ...defaultSettings.youtubeMusic, ...serverSettings.youtubeMusic },
+          spotify: { ...defaultSettings.spotify, ...serverSettings.spotify },
           ai: { ...defaultSettings.ai, ...serverSettings.ai },
           appearance: { ...defaultSettings.appearance, ...serverSettings.appearance },
           panelTimeouts: { ...defaultSettings.panelTimeouts, ...serverSettings.panelTimeouts },
@@ -327,6 +370,27 @@ export const useSettingsStore = create<SettingsState>()(
       debouncedSave(get().saveSettings)
     },
 
+    setBetterBrainConfig: (config) => {
+      set((state) => ({
+        betterBrain: { ...state.betterBrain, ...config },
+      }))
+      debouncedSave(get().saveSettings)
+    },
+
+    setYouTubeMusicConfig: (config) => {
+      set((state) => ({
+        youtubeMusic: { ...state.youtubeMusic, ...config },
+      }))
+      debouncedSave(get().saveSettings)
+    },
+
+    setSpotifyConfig: (config) => {
+      set((state) => ({
+        spotify: { ...state.spotify, ...config },
+      }))
+      debouncedSave(get().saveSettings)
+    },
+
     setServicesEnabled: (services) => {
       set((state) => ({
         servicesEnabled: { ...state.servicesEnabled, ...services },
@@ -376,6 +440,9 @@ export const useSettingsStore = create<SettingsState>()(
         if (data.dozzle) set({ dozzle: { ...defaultSettings.dozzle, ...data.dozzle } })
         if (data.vikunja) set({ vikunja: { ...defaultSettings.vikunja, ...data.vikunja } })
         if (data.notemark) set({ notemark: { ...defaultSettings.notemark, ...data.notemark } })
+        if (data.betterBrain) set({ betterBrain: { ...defaultSettings.betterBrain, ...data.betterBrain } })
+        if (data.youtubeMusic) set({ youtubeMusic: { ...defaultSettings.youtubeMusic, ...data.youtubeMusic } })
+        if (data.spotify) set({ spotify: { ...defaultSettings.spotify, ...data.spotify } })
         if (data.ai) set({ ai: { ...defaultSettings.ai, ...data.ai } })
         if (data.appearance) set({ appearance: { ...defaultSettings.appearance, ...data.appearance } })
         if (data.panelTimeouts) set({ panelTimeouts: { ...defaultSettings.panelTimeouts, ...data.panelTimeouts } })

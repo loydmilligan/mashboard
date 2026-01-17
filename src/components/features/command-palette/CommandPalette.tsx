@@ -10,6 +10,7 @@ import {
   Sun,
   Moon,
   Search,
+  Music,
 } from 'lucide-react'
 import {
   CommandDialog,
@@ -57,7 +58,7 @@ export function CommandPalette() {
   }
 
   // Helper to open or focus app
-  const openOrFocusApp = (appType: 'termix' | 'bytestash' | 'searxng', title: string) => {
+  const openOrFocusApp = (appType: 'termix' | 'bytestash' | 'searxng' | 'music-league', title: string) => {
     const existingTab = openTabs.find((t) => t.appType === appType)
     if (existingTab) {
       setActiveTab(existingTab.id)
@@ -108,6 +109,13 @@ export function CommandPalette() {
         shortcut: getShortcutDisplay(SHORTCUTS.SEARCH),
         action: () => runAction(() => openOrFocusApp('searxng', 'Search')),
         keywords: ['search', 'web', 'searxng'],
+      },
+      {
+        id: 'music-league',
+        label: 'Open Music League Strategist',
+        icon: <Music className="mr-2 h-4 w-4" />,
+        action: () => runAction(() => openOrFocusApp('music-league', 'Music League')),
+        keywords: ['music', 'league', 'strategist', 'songs', 'playlist'],
       },
       {
         id: 'snippets-popover',

@@ -1,9 +1,11 @@
-import { ChevronDown, ChevronRight, CheckSquare, FileText, Target, Server } from 'lucide-react'
+import { ChevronDown, ChevronRight, CheckSquare, FileText, Target, Server, Newspaper } from 'lucide-react'
 import { ServerStatusWidget } from './widgets/ServerStatusWidget'
 import { TaskWidget } from '@/components/features/tasks/TaskWidget'
 import { HabitWidget } from '@/components/features/habits/HabitWidget'
 import { NotesWidget } from '@/components/features/notes/NotesWidget'
+import { BriefingWidget } from '@/components/features/better-brain/BriefingWidget'
 import { useLayoutStore, type DashboardWidgetId } from '@/stores/layoutStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { cn } from '@/lib/utils'
 
 interface CollapsibleWidgetProps {
@@ -52,6 +54,8 @@ function CollapsibleWidget({ id, title, icon, children }: CollapsibleWidgetProps
 }
 
 export function DashboardGrid() {
+  const { servicesEnabled } = useSettingsStore()
+
   return (
     <div className="space-y-2">
       <CollapsibleWidget id="tasks" title="Tasks" icon={<CheckSquare className="h-4 w-4" />}>
@@ -65,6 +69,12 @@ export function DashboardGrid() {
       <CollapsibleWidget id="habits" title="Habits" icon={<Target className="h-4 w-4" />}>
         <HabitWidget />
       </CollapsibleWidget>
+
+      {servicesEnabled.betterBrain && (
+        <CollapsibleWidget id="briefing" title="Daily Briefing" icon={<Newspaper className="h-4 w-4" />}>
+          <BriefingWidget />
+        </CollapsibleWidget>
+      )}
 
       <CollapsibleWidget id="serverStatus" title="Server Status" icon={<Server className="h-4 w-4" />}>
         <ServerStatusWidget />

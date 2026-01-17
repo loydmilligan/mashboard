@@ -25,6 +25,7 @@ export const STORAGE_KEYS = {
   CHAT: 'mashb0ard-chat',
   WORKFLOWS: 'mashb0ard-workflows',
   PINNED_NOTES: 'mashb0ard-pinned-notes',
+  MUSIC_LEAGUE: 'mashb0ard-music-league',
   UI: 'mashb0ard-ui',
   LAYOUT: 'mashb0ard-layout',
   CONTENT_TABS: 'mashb0ard-content-tabs',

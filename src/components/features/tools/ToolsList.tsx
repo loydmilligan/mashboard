@@ -1,4 +1,4 @@
-import { Terminal, Code2, Zap, Plus, Search, Settings, ExternalLink } from 'lucide-react'
+import { Terminal, Code2, Zap, Plus, Search, Settings, ExternalLink, Music } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -25,6 +25,12 @@ const tools: Tool[] = [
     name: 'Termix',
     icon: <Terminal className="h-4 w-4" />,
     description: 'SSH Terminal',
+  },
+  {
+    id: 'music-league',
+    name: 'Music League',
+    icon: <Music className="h-4 w-4" />,
+    description: 'Strategist',
   },
   {
     id: 'bytestash',

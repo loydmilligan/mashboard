@@ -6,7 +6,7 @@ interface LeftPanelSection {
   collapsed: boolean
 }
 
-export type DashboardWidgetId = 'tasks' | 'notes' | 'habits' | 'serverStatus'
+export type DashboardWidgetId = 'tasks' | 'notes' | 'habits' | 'serverStatus' | 'briefing'
 
 interface LayoutState {
   // Split position as percentage (0.4 = 40%)
@@ -42,6 +42,7 @@ const defaultDashboardWidgets: Record<DashboardWidgetId, { collapsed: boolean }>
   notes: { collapsed: false },
   habits: { collapsed: false },
   serverStatus: { collapsed: false },
+  briefing: { collapsed: false },
 }
 
 export const useLayoutStore = create<LayoutState>()(

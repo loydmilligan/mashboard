@@ -16,6 +16,7 @@ import {
   Copy,
   XCircle,
   ArrowRightToLine,
+  Database,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -44,6 +45,8 @@ const APP_CONFIG: Record<AppType, { icon: React.ReactNode; label: string }> = {
   bytestash: { icon: <Code2 className="h-4 w-4" />, label: 'ByteStash' },
   searxng: { icon: <Search className="h-4 w-4" />, label: 'Search' },
   'home-assistant': { icon: <Home className="h-4 w-4" />, label: 'Home Assistant' },
+  betterbrain: { icon: <Database className="h-4 w-4" />, label: 'Better Brain' },
+  'music-league': { icon: <Music className="h-4 w-4" />, label: 'Music League' },
   // Viewer apps
   webview: { icon: <Globe className="h-4 w-4" />, label: 'Web View' },
   'notemark-viewer': { icon: <FileText className="h-4 w-4" />, label: 'Note' },
@@ -176,6 +179,8 @@ function EmptyState() {
 import { TermixApp } from '@/components/features/content-apps/apps/TermixApp'
 import { ByteStashApp } from '@/components/features/content-apps/apps/ByteStashApp'
 import { SearxngApp } from '@/components/features/content-apps/apps/SearxngApp'
+import { BetterBrainApp } from '@/components/features/content-apps/apps/BetterBrainApp'
+import { MusicLeagueApp } from '@/components/features/content-apps/apps/MusicLeagueApp'
 // Viewer apps
 import { WebViewApp } from '@/components/features/content-apps/apps/WebViewApp'
 import { NoteMarkViewerApp } from '@/components/features/content-apps/apps/NoteMarkViewerApp'
@@ -204,6 +209,10 @@ function AppRenderer({ tab }: { tab: ContentTab }) {
           <p className="text-muted-foreground">Home Assistant coming soon</p>
         </div>
       )
+    case 'betterbrain':
+      return <BetterBrainApp />
+    case 'music-league':
+      return <MusicLeagueApp />
     // Viewer apps
     case 'webview':
       return <WebViewApp url={props.url as string} />
@@ -314,6 +323,14 @@ export function ContentArea() {
             <DropdownMenuItem onClick={() => handleAddTab('searxng')}>
               <Search className="mr-2 h-4 w-4" />
               Search
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleAddTab('betterbrain')}>
+              <Database className="mr-2 h-4 w-4" />
+              Better Brain
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleAddTab('music-league')}>
+              <Music className="mr-2 h-4 w-4" />
+              Music League
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

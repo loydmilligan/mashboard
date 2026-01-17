@@ -3,7 +3,13 @@ import { persist } from 'zustand/middleware'
 import { STORAGE_KEYS } from '@/lib/constants'
 
 // Core app types (existing)
-export type CoreAppType = 'termix' | 'bytestash' | 'searxng' | 'home-assistant'
+export type CoreAppType =
+  | 'termix'
+  | 'bytestash'
+  | 'searxng'
+  | 'home-assistant'
+  | 'betterbrain'
+  | 'music-league'
 
 // Resource viewer types (new - for task resources)
 export type ViewerAppType =

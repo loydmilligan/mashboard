@@ -42,6 +42,19 @@ export interface SettingsData {
       color: string
     }>
   }
+  betterBrain?: {
+    baseUrl: string
+  }
+  youtubeMusic?: {
+    clientId: string
+    clientSecret: string
+    refreshToken: string
+  }
+  spotify?: {
+    clientId: string
+    clientSecret: string
+    refreshToken: string
+  }
   ai?: {
     defaultModel: string
     favoriteModels: string[]
@@ -67,6 +80,7 @@ export interface SettingsData {
     dozzle: boolean
     vikunja: boolean
     notemark: boolean
+    betterBrain: boolean
   }
 }
 

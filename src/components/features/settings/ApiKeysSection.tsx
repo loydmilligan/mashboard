@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Eye, EyeOff, ExternalLink, Lightbulb, BookOpen, Zap, FileText } from 'lucide-react'
+import { Eye, EyeOff, ExternalLink, Lightbulb, BookOpen, Zap, FileText, LogIn, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,9 @@ const serviceIcons: Record<string, ServiceIconConfig> = {
   dozzle: { name: 'dozzle' },
   vikunja: { name: 'vikunja' },
   notemark: { name: 'note-mark' },
+  betterBrain: { name: 'brain', hasDarkVariant: true }, // generic brain icon
+  youtubeMusic: { name: 'youtube-music' },
+  spotify: { name: 'spotify' },
 }
 
 // Get icon URL based on theme
@@ -195,6 +198,12 @@ export function ApiKeysSection() {
     setVikunjaConfig,
     notemark,
     setNoteMarkConfig,
+    betterBrain,
+    setBetterBrainConfig,
+    youtubeMusic,
+    setYouTubeMusicConfig,
+    spotify,
+    setSpotifyConfig,
     servicesEnabled,
     setServicesEnabled,
   } = useSettingsStore()
@@ -203,6 +212,32 @@ export function ApiKeysSection() {
   const [notemarkBooks, setNotemarkBooks] = useState<NoteMarkBook[]>([])
   const [notemarkNotes, setNotemarkNotes] = useState<Record<string, NoteMarkNote[]>>({})
   const [loadingNotemark, setLoadingNotemark] = useState(false)
+
+  // NoteMark login state
+  const [notemarkLoginPassword, setNotemarkLoginPassword] = useState('')
+  const [notemarkLoginLoading, setNotemarkLoginLoading] = useState(false)
+  const [notemarkLoginError, setNotemarkLoginError] = useState('')
+
+  // NoteMark login handler
+  const handleNotemarkLogin = async () => {
+    if (!notemark.username || !notemarkLoginPassword) {
+      setNotemarkLoginError('Username and password required')
+      return
+    }
+
+    setNotemarkLoginLoading(true)
+    setNotemarkLoginError('')
+
+    try {
+      const result = await notemarkService.login(notemark.username, notemarkLoginPassword)
+      setNoteMarkConfig({ token: result.access_token })
+      setNotemarkLoginPassword('') // Clear password after success
+    } catch (error) {
+      setNotemarkLoginError(error instanceof Error ? error.message : 'Login failed')
+    } finally {
+      setNotemarkLoginLoading(false)
+    }
+  }
 
   // Fetch NoteMark books when token is set
   useEffect(() => {
@@ -475,26 +510,65 @@ export function ApiKeysSection() {
               Use /api/notemark with the proxy Docker setup for API calls
             </p>
           </div>
+          {/* Login Form */}
+          <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+            <Label className="text-sm font-medium">Login to NoteMark</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="notemark-username" className="text-xs">Username</Label>
+                <Input
+                  id="notemark-username"
+                  value={notemark.username}
+                  onChange={(e) => setNoteMarkConfig({ username: e.target.value })}
+                  placeholder="your-username"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="notemark-password" className="text-xs">Password</Label>
+                <Input
+                  id="notemark-password"
+                  type="password"
+                  value={notemarkLoginPassword}
+                  onChange={(e) => setNotemarkLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  onKeyDown={(e) => e.key === 'Enter' && handleNotemarkLogin()}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={handleNotemarkLogin}
+                disabled={notemarkLoginLoading || !notemark.username || !notemarkLoginPassword}
+              >
+                {notemarkLoginLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <LogIn className="mr-2 h-4 w-4" />
+                )}
+                Login
+              </Button>
+              {notemark.token && (
+                <span className="text-xs text-green-600 dark:text-green-400">✓ Token set</span>
+              )}
+              {notemarkLoginError && (
+                <span className="text-xs text-red-600 dark:text-red-400">{notemarkLoginError}</span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Enter your NoteMark credentials to get an access token
+            </p>
+          </div>
+
+          {/* Manual Token Entry (for advanced users) */}
           <MaskedInput
             id="notemark-token"
-            label="Access Token"
+            label="Access Token (manual)"
             value={notemark.token}
             onChange={(value) => setNoteMarkConfig({ token: value })}
             placeholder="eyJ..."
-            helpText="JWT token from NoteMark login"
+            helpText="Or paste a token directly if you have one"
           />
-          <div className="space-y-2">
-            <Label htmlFor="notemark-username">Username</Label>
-            <Input
-              id="notemark-username"
-              value={notemark.username}
-              onChange={(e) => setNoteMarkConfig({ username: e.target.value })}
-              placeholder="your-username"
-            />
-            <p className="text-xs text-muted-foreground">
-              Your NoteMark username (for public note links)
-            </p>
-          </div>
 
           {/* Default Book Selection */}
           {notemarkBooks.length > 0 && (
@@ -559,6 +633,115 @@ export function ApiKeysSection() {
           {loadingNotemark && (
             <p className="text-xs text-muted-foreground">Loading NoteMark data...</p>
           )}
+        </div>
+      </ServiceSection>
+
+      <Separator />
+
+      {/* Better Brain */}
+      <ServiceSection
+        title="Better Brain (Knowledge Base)"
+        serviceKey="betterBrain"
+        enabled={servicesEnabled.betterBrain}
+        onToggle={(enabled) => setServicesEnabled({ betterBrain: enabled })}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="betterbrain-url">API Base URL</Label>
+          <Input
+            id="betterbrain-url"
+            value={betterBrain.baseUrl}
+            onChange={(e) => setBetterBrainConfig({ baseUrl: e.target.value })}
+            placeholder="http://localhost:8002"
+          />
+          <p className="text-xs text-muted-foreground">
+            URL to your Better Brain API (for knowledge base and daily briefings)
+          </p>
+        </div>
+      </ServiceSection>
+
+      <Separator />
+
+      {/* YouTube Music */}
+      <ServiceSection
+        title="YouTube Music (Playlist Export)"
+        serviceKey="youtubeMusic"
+        enabled={true}
+        onToggle={() => {}}
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Configure OAuth credentials to create YouTube Music playlists from Music League.
+            Requires a Google Cloud project with YouTube Data API v3 enabled.
+          </p>
+          <MaskedInput
+            id="youtube-client-id"
+            label="Client ID"
+            value={youtubeMusic.clientId}
+            onChange={(value) => setYouTubeMusicConfig({ clientId: value })}
+            placeholder="xxxx.apps.googleusercontent.com"
+            helpText="From Google Cloud Console → APIs & Services → Credentials"
+            helpLink="https://console.cloud.google.com/apis/credentials"
+          />
+          <MaskedInput
+            id="youtube-client-secret"
+            label="Client Secret"
+            value={youtubeMusic.clientSecret}
+            onChange={(value) => setYouTubeMusicConfig({ clientSecret: value })}
+            placeholder="GOCSPX-..."
+            helpText="OAuth 2.0 Client Secret"
+          />
+          <MaskedInput
+            id="youtube-refresh-token"
+            label="Refresh Token"
+            value={youtubeMusic.refreshToken}
+            onChange={(value) => setYouTubeMusicConfig({ refreshToken: value })}
+            placeholder="1//..."
+            helpText="OAuth refresh token (use OAuth Playground to generate)"
+            helpLink="https://developers.google.com/oauthplayground/"
+          />
+        </div>
+      </ServiceSection>
+
+      <Separator />
+
+      {/* Spotify */}
+      <ServiceSection
+        title="Spotify (Playlist Export)"
+        serviceKey="spotify"
+        enabled={true}
+        onToggle={() => {}}
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Configure OAuth credentials to create Spotify playlists from Music League.
+            Requires a Spotify Developer app.
+          </p>
+          <MaskedInput
+            id="spotify-client-id"
+            label="Client ID"
+            value={spotify.clientId}
+            onChange={(value) => setSpotifyConfig({ clientId: value })}
+            placeholder="32 character hex string"
+            helpText="From Spotify Developer Dashboard → Your App → Settings"
+            helpLink="https://developer.spotify.com/dashboard"
+          />
+          <MaskedInput
+            id="spotify-client-secret"
+            label="Client Secret"
+            value={spotify.clientSecret}
+            onChange={(value) => setSpotifyConfig({ clientSecret: value })}
+            placeholder="32 character hex string"
+            helpText="Client Secret from your Spotify app"
+          />
+          <MaskedInput
+            id="spotify-refresh-token"
+            label="Refresh Token"
+            value={spotify.refreshToken}
+            onChange={(value) => setSpotifyConfig({ refreshToken: value })}
+            placeholder="AQ..."
+            helpText="OAuth refresh token (use Spotify auth flow to generate)"
+            helpLink="https://developer.spotify.com/documentation/web-api/tutorials/code-flow"
+          />
         </div>
       </ServiceSection>
     </div>

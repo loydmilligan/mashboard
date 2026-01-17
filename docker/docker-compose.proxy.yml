@@ -68,6 +68,7 @@ services:
       - VIKUNJA_URL=vikunja:3456
       - NOTEMARK_URL=notemark:8080
       - MASHBOARD_API_URL=mashboard-api:3001
+      - BETTER_BRAIN_URL=better-brain:8000
     networks:
       - mashb0ard-net
     depends_on:
@@ -78,6 +79,7 @@ services:
       - vikunja
       - notemark
       - mashboard-api
+      - better-brain
 
   # Mashboard API - Backend for habits, pomodoro tracking, etc.
   mashboard-api:
@@ -228,6 +230,32 @@ services:
     networks:
       - mashb0ard-net
 
+  # ==========================================================================
+  # BETTER BRAIN - Content Processing & Briefings
+  # ==========================================================================
+  better-brain:
+    build:
+      context: ../../mashbrain
+      dockerfile: Dockerfile
+    container_name: better-brain
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-mashboard}:${POSTGRES_PASSWORD:-mashboard-secret-change-me}@postgres:5432/${POSTGRES_DB:-mashboard}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - DEFAULT_MODEL=${BB_DEFAULT_MODEL:-openai/gpt-4o-mini}
+      - EMBEDDING_MODEL=${BB_EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      - CHROMA_PERSIST_DIR=/data/chroma
+      - LOG_LEVEL=${BB_LOG_LEVEL:-INFO}
+      - BRIEFING_LOOKBACK_HOURS=${BB_BRIEFING_LOOKBACK_HOURS:-12}
+    volumes:
+      - better_brain_data:/data
+    networks:
+      - mashb0ard-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 networks:
   mashb0ard-net:
     driver: bridge
@@ -240,3 +268,4 @@ volumes:
   bytestash_data:
   searxng_data:
   notemark_data:
+  better_brain_data:
