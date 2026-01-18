@@ -1,10 +1,39 @@
-// Music League Strategist Types - Conversational Design
+// Music League Strategist Types - Multi-Tier Funnel Design
+
+// === Phase & Tier Types ===
 
 export type MusicLeaguePhase =
   | 'idle'           // No active session
-  | 'conversation'   // Main conversational mode - AI maintains candidates and asks questions
-  | 'finalists'      // Comparative analysis for final picks
+  | 'brainstorm'     // Discovery mode - AI suggests songs
+  | 'refine'         // Refinement mode - narrowing down choices
+  | 'decide'         // Decision mode - final selection
   | 'complete'       // Session complete
+  // Legacy phases (for migration)
+  | 'conversation'   // Maps to 'brainstorm'
+  | 'finalists'      // Maps to 'decide'
+
+export type FunnelTier = 'candidates' | 'semifinalists' | 'finalists' | 'pick'
+
+export const FUNNEL_TIER_LIMITS: Record<FunnelTier, number> = {
+  candidates: 30,
+  semifinalists: 8,
+  finalists: 4,
+  pick: 1,
+}
+
+// === Song Types ===
+
+export interface SongPromotionRecord {
+  fromTier: FunnelTier | 'working'
+  toTier: FunnelTier
+  reason?: string
+  timestamp: number
+}
+
+export interface SongRatings {
+  theme: number    // 1-5 star rating for theme fit
+  general: number  // 1-5 star rating for general quality
+}
 
 export interface Song {
   id: string
@@ -21,7 +50,15 @@ export interface Song {
   spotifyUri?: string
   isFavorite?: boolean   // User marked as favorite
   isEliminated?: boolean // User explicitly eliminated
-  userNotes?: string
+  userNotes?: string     // User's markdown notes about the song
+  ratings?: SongRatings  // User's 5-star ratings
+  aiDescription?: string // AI-generated description (cached)
+
+  // Funnel system additions
+  currentTier?: FunnelTier
+  addedInSessionId?: string
+  promotionHistory?: SongPromotionRecord[]
+  rank?: number          // User-defined rank within tier (for semifinalists+)
 }
 
 // A rejected song - to prevent re-proposing
@@ -53,6 +90,38 @@ export interface ThemeContext {
   rawTheme: string           // The original theme text
   interpretation?: string    // AI's interpretation
   strategy?: string          // The angle/approach chosen
+}
+
+// === Theme Entity (NEW) ===
+
+export type ThemeStatus = 'active' | 'submitted' | 'archived'
+
+export interface MusicLeagueTheme {
+  id: string
+  rawTheme: string                    // Original Music League prompt
+  interpretation?: string             // AI's interpretation
+  strategy?: string                   // The angle/approach chosen
+  title: string                       // User-editable display name
+
+  createdAt: number
+  updatedAt: number
+
+  // Funnel tiers (theme-wide, shared across sessions)
+  pick: Song | null
+  finalists: Song[]                   // max 4
+  semifinalists: Song[]               // max 8
+  candidates: Song[]                  // max 30
+
+  // Spotify sync
+  spotifyPlaylist?: {
+    playlistId: string
+    playlistUrl: string
+    syncedTier: FunnelTier
+    lastSyncAt: number
+  }
+
+  status: ThemeStatus
+  deadline?: number                   // Optional submission deadline
 }
 
 export interface PreferenceEvidence {
@@ -87,10 +156,22 @@ export interface MusicLeagueSession {
   createdAt: number
   updatedAt: number
   phase: MusicLeaguePhase
-  theme: ThemeContext | null
-  candidates: Song[]          // Current 5-8 candidate songs
-  finalists: Song[]           // Songs marked for final consideration
-  rejectedSongs: RejectedSong[]  // Songs that have been rejected - don't re-propose
+
+  // Theme relationship (NEW)
+  themeId?: string                    // Reference to parent theme (optional for migration)
+  title: string                       // Descriptive title (auto-generated or custom)
+
+  // Legacy: for backwards compatibility
+  theme: ThemeContext | null          // Deprecated - use themeId instead
+
+  // Session-specific working set (not shared with theme)
+  workingCandidates: Song[]           // Session-specific working candidates from AI
+
+  // Legacy fields (kept for migration)
+  candidates: Song[]                  // DEPRECATED: use workingCandidates
+  finalists: Song[]                   // DEPRECATED: use theme funnel tiers
+
+  rejectedSongs: RejectedSong[]       // Songs rejected in this session
   sessionPreferences: SessionPreference[]  // Preferences extracted from this session
   conversationHistory: Array<{
     role: 'user' | 'assistant' | 'system'
@@ -104,9 +185,15 @@ export interface MusicLeagueSession {
     playlistUrl: string
     createdAt: number
   }
-  iterationCount: number      // Track conversation iterations
-  finalPick?: Song            // The song they ultimately chose
+  iterationCount: number              // Track conversation iterations
+  finalPick?: Song                    // The song they ultimately chose
 }
+
+// AI tier action types
+export type TierAction =
+  | { action: 'promote'; songTitle: string; songArtist: string; toTier: FunnelTier; reason?: string }
+  | { action: 'demote'; songTitle: string; songArtist: string; toTier: FunnelTier; reason?: string }
+  | { action: 'remove'; songTitle: string; songArtist: string; reason?: string }
 
 // AI Response structure for conversational mode
 export interface AIConversationResponse {
@@ -122,17 +209,19 @@ export interface AIConversationResponse {
   message: string           // Conversational response text
   interpretation?: string   // Theme interpretation (first response only)
   action?: 'create_playlist:spotify' | 'create_playlist:youtube' | 'enter_finalists' | 'finalize_pick' | null
-  // New: Extracted preferences from user's last message
+  // Extracted preferences from user's last message
   extractedPreferences?: Array<{
     statement: string       // Clear preference, e.g., "Dislikes slow tempo"
     confidence: 'high' | 'medium' | 'low'
   }>
-  // New: Songs to reject based on user feedback
+  // Songs to reject based on user feedback
   songsToReject?: Array<{
     title: string
     artist: string
     reason: string
   }>
+  // Tier actions for funnel management
+  tierActions?: TierAction[]
 }
 
 // AI Response for finalists mode
@@ -153,6 +242,16 @@ export const MUSIC_LEAGUE_PROMPTS = {
 OBJECTIVE: Help the player pick the perfect song for their Music League round through iterative refinement.
 TONE: Direct, insightful, slightly provocative. Push back. Challenge assumptions.
 
+=== FUNNEL SYSTEM ===
+Songs progress through a 4-tier funnel:
+  [PICK]         1 song  - The final submission
+  [FINALISTS]    4 max   - Top contenders for final decision
+  [SEMIFINALISTS] 8 max  - Strong candidates worth serious consideration
+  [CANDIDATES]   30 max  - Discovery pool of potential options
+
+Your suggestions go to a "working set" in this session. Good discoveries can be promoted to the theme's funnel.
+When the player likes a song, suggest promoting it. When they're lukewarm, keep exploring.
+
 === CORE RULES ===
 1. ALWAYS maintain exactly 5-8 candidate songs in your response
 2. NEVER include multiple songs by the same artist (variety is key)
@@ -165,6 +264,7 @@ TONE: Direct, insightful, slightly provocative. Push back. Challenge assumptions
 7. NEVER re-propose a song that has been rejected (check REJECTED SONGS list)
 8. ALWAYS check session and long-term preferences before proposing replacements
 9. ALWAYS include year and genre for EVERY candidate - research if needed
+10. Check the FUNNEL STATE to avoid suggesting songs already in the funnel
 
 === RESPONSE FORMAT ===
 Return ONLY valid JSON (no markdown, no commentary outside the JSON):
@@ -194,6 +294,15 @@ Return ONLY valid JSON (no markdown, no commentary outside the JSON):
       "title": "Song being removed",
       "artist": "Artist",
       "reason": "Why it's being rejected based on user feedback"
+    }
+  ],
+  "tierActions": [
+    {
+      "action": "promote",
+      "songTitle": "Song Title",
+      "songArtist": "Artist Name",
+      "toTier": "candidates",
+      "reason": "Why this song should be promoted"
     }
   ]
 }
@@ -258,7 +367,30 @@ Set "action": "finalize_pick"
 When responding after a playlist was just created:
 - Assume the player has listened to the songs
 - Ask follow-up questions about what they heard
-- Be ready to swap songs based on their listening feedback`,
+- Be ready to swap songs based on their listening feedback
+
+=== TIER ACTIONS ===
+Use "tierActions" to suggest moving songs through the funnel when appropriate:
+- "promote": Move a song up (e.g., from candidates to semifinalists)
+- "demote": Move a song down (rarely needed, but available)
+- "remove": Remove a song from the funnel entirely
+
+When to suggest promotions:
+- Player explicitly says "I love this one" or "This is definitely a contender"
+- Player asks to "save" or "keep" a song for final consideration
+- Player responds very positively to a song multiple times
+- A song clearly stands out as superior to others
+
+Valid toTier values: "candidates", "semifinalists", "finalists", "pick"
+
+Example tier action:
+{
+  "action": "promote",
+  "songTitle": "Karma Police",
+  "songArtist": "Radiohead",
+  "toTier": "semifinalists",
+  "reason": "Player expressed strong enthusiasm and it fits their preference profile"
+}`,
 
   // Finalists comparative analysis prompt
   finalists_system: `ROLE: Music League Strategist - Final Decision Mode

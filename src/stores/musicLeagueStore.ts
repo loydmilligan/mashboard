@@ -1,10 +1,11 @@
-// Music League Strategist Store - Conversational Design
+// Music League Strategist Store - Multi-Tier Funnel Design
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
   MusicLeaguePhase,
   MusicLeagueSession,
+  MusicLeagueTheme,
   MusicLeagueUserProfile,
   PreferenceEvidence,
   Song,
@@ -12,110 +13,303 @@ import type {
   RejectedSong,
   SessionPreference,
   LongTermPreference,
+  FunnelTier,
+  ThemeStatus,
 } from '@/types/musicLeague'
-import { MUSIC_LEAGUE_PROMPTS } from '@/types/musicLeague'
+import { MUSIC_LEAGUE_PROMPTS, FUNNEL_TIER_LIMITS } from '@/types/musicLeague'
 import { STORAGE_KEYS } from '@/lib/constants'
 
 function generateId(): string {
   return `ml-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+function generateThemeId(): string {
+  return `theme-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
 function generateSongId(): string {
   return `song-${Math.random().toString(36).slice(2, 11)}`
 }
 
+// Generate a title from the raw theme text
+function generateThemeTitle(rawTheme: string): string {
+  // Take first line, trim, and limit to 50 chars
+  const firstLine = rawTheme.split('\n')[0].trim()
+  return firstLine.length > 50 ? firstLine.substring(0, 47) + '...' : firstLine
+}
+
 interface MusicLeagueState {
-  // State
+  // === State ===
+  // Themes (NEW)
+  themes: MusicLeagueTheme[]
+  activeThemeId: string | null
+
+  // Sessions
   sessions: MusicLeagueSession[]
   activeSessionId: string | null
+
+  // UI/Processing
   strategistModel: string | null
   isProcessing: boolean
   error: string | null
+
+  // User profile
   userProfile: MusicLeagueUserProfile | null
 
-  // Getters
-  activeSession: () => MusicLeagueSession | undefined
+  // Migration version
+  _version: number
 
-  // Session Management
-  createSession: () => string
+  // === Getters ===
+  activeTheme: () => MusicLeagueTheme | undefined
+  activeSession: () => MusicLeagueSession | undefined
+  getThemeSessions: (themeId: string) => MusicLeagueSession[]
+  getAggregatedRejectedSongs: (themeId: string) => RejectedSong[]
+  getAggregatedPreferences: (themeId: string) => SessionPreference[]
+
+  // === Theme Management (NEW) ===
+  createTheme: (rawTheme: string) => string
+  updateTheme: (themeId: string, updates: Partial<MusicLeagueTheme>) => void
+  setActiveTheme: (themeId: string | null) => void
+  archiveTheme: (themeId: string) => void
+  deleteTheme: (themeId: string) => void
+  setThemeDeadline: (themeId: string, deadline: number | undefined) => void
+
+  // === Session Management ===
+  createSession: (themeId?: string) => string
+  createSessionForTheme: (themeId: string) => string
+  updateSessionTitle: (sessionId: string, title: string) => void
   resumeSession: (id: string) => void
   deleteSession: (id: string) => void
   clearAllSessions: () => void
 
-  // Phase Management
+  // === Tier Management (NEW) ===
+  promoteSong: (themeId: string, song: Song, toTier: FunnelTier, reason?: string) => void
+  demoteSong: (themeId: string, song: Song, toTier: FunnelTier, reason?: string) => void
+  removeSongFromTier: (themeId: string, songId: string, tier: FunnelTier) => void
+  addCandidateToTheme: (themeId: string, song: Song) => void
+  setThemePick: (themeId: string, song: Song | null) => void
+
+  // === Song Metadata (NEW) ===
+  updateSongInTheme: (themeId: string, songId: string, updates: Partial<Song>) => void
+  reorderSongsInTier: (themeId: string, tier: FunnelTier, songIds: string[]) => void
+
+  // === Playlist Sync (NEW) ===
+  setThemePlaylist: (themeId: string, tier: FunnelTier, playlistId: string, playlistUrl: string) => void
+
+  // === Phase Management ===
   setPhase: (phase: MusicLeaguePhase) => void
 
-  // Theme Management
+  // === Legacy Theme Support ===
   setTheme: (theme: ThemeContext) => void
 
-  // Candidate Management (5-8 songs)
-  setCandidates: (songs: Song[]) => void
+  // === Working Candidates Management ===
+  setWorkingCandidates: (songs: Song[]) => void
+  setCandidates: (songs: Song[]) => void  // Legacy alias
   updateCandidate: (songId: string, updates: Partial<Song>) => void
   toggleFavorite: (songId: string) => void
 
-  // Finalists Management
+  // === Legacy Finalists Management ===
   setFinalists: (songs: Song[]) => void
   addToFinalists: (song: Song) => void
   removeFromFinalists: (songId: string) => void
 
-  // Conversation History
+  // === Conversation History ===
   addToConversation: (role: 'user' | 'assistant' | 'system', content: string) => void
   clearConversation: () => void
   addPreferenceEvidence: (role: PreferenceEvidence['role'], content: string) => void
 
-  // Playlist Creation
+  // === Playlist Creation (Legacy) ===
   setPlaylistCreated: (platform: 'youtube' | 'spotify', playlistId: string, playlistUrl: string) => void
 
-  // Iteration tracking
+  // === Iteration tracking ===
   incrementIteration: () => void
 
-  // Rejected Songs Management
+  // === Rejected Songs Management ===
   addRejectedSong: (song: RejectedSong) => void
   addRejectedSongs: (songs: RejectedSong[]) => void
   isRejected: (title: string, artist: string) => boolean
 
-  // Session Preferences Management
+  // === Session Preferences Management ===
   addSessionPreference: (pref: SessionPreference) => void
   addSessionPreferences: (prefs: SessionPreference[]) => void
   clearSessionPreferences: () => void
 
-  // Long-Term Preferences Management
+  // === Long-Term Preferences Management ===
   addLongTermPreferences: (prefs: LongTermPreference[]) => void
   removeLongTermPreference: (statement: string) => void
 
-  // Final Pick
+  // === Final Pick ===
   setFinalPick: (song: Song) => void
 
-  // Utility
+  // === Utility ===
   setProcessing: (processing: boolean) => void
   setError: (error: string | null) => void
   setUserProfile: (profile: MusicLeagueUserProfile | null) => void
   setStrategistModel: (model: string | null) => void
+
+  // === Export ===
+  exportFunnelSummary: (themeId: string) => string
 }
 
 export const useMusicLeagueStore = create<MusicLeagueState>()(
   persist(
     (set, get) => ({
+      // === Initial State ===
+      themes: [],
+      activeThemeId: null,
       sessions: [],
       activeSessionId: null,
       strategistModel: null,
       isProcessing: false,
       error: null,
       userProfile: null,
+      _version: 2,
+
+      // === Getters ===
+      activeTheme: () => {
+        const state = get()
+        return state.themes.find((t) => t.id === state.activeThemeId)
+      },
 
       activeSession: () => {
         const state = get()
         return state.sessions.find((s) => s.id === state.activeSessionId)
       },
 
-      createSession: () => {
+      getThemeSessions: (themeId: string) => {
+        const state = get()
+        return state.sessions.filter((s) => s.themeId === themeId)
+      },
+
+      getAggregatedRejectedSongs: (themeId: string) => {
+        const sessions = get().getThemeSessions(themeId)
+        const allRejected: RejectedSong[] = []
+        const seen = new Set<string>()
+
+        for (const session of sessions) {
+          for (const rejected of session.rejectedSongs || []) {
+            const key = `${rejected.title.toLowerCase()}:${rejected.artist.toLowerCase()}`
+            if (!seen.has(key)) {
+              seen.add(key)
+              allRejected.push(rejected)
+            }
+          }
+        }
+        return allRejected
+      },
+
+      getAggregatedPreferences: (themeId: string) => {
+        const sessions = get().getThemeSessions(themeId)
+        const allPrefs: SessionPreference[] = []
+
+        for (const session of sessions) {
+          for (const pref of session.sessionPreferences || []) {
+            allPrefs.push(pref)
+          }
+        }
+        // Sort by confidence (high first), then by timestamp (recent first)
+        return allPrefs.sort((a, b) => {
+          const confOrder = { high: 0, medium: 1, low: 2 }
+          if (confOrder[a.confidence] !== confOrder[b.confidence]) {
+            return confOrder[a.confidence] - confOrder[b.confidence]
+          }
+          return b.timestamp - a.timestamp
+        })
+      },
+
+      // === Theme Management ===
+      createTheme: (rawTheme: string) => {
+        const id = generateThemeId()
+        const theme: MusicLeagueTheme = {
+          id,
+          rawTheme,
+          title: generateThemeTitle(rawTheme),
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          pick: null,
+          finalists: [],
+          semifinalists: [],
+          candidates: [],
+          status: 'active',
+        }
+
+        set((state) => ({
+          themes: [theme, ...state.themes],
+          activeThemeId: id,
+          error: null,
+        }))
+
+        return id
+      },
+
+      updateTheme: (themeId: string, updates: Partial<MusicLeagueTheme>) => {
+        set((state) => ({
+          themes: state.themes.map((t) =>
+            t.id === themeId
+              ? { ...t, ...updates, updatedAt: Date.now() }
+              : t
+          ),
+        }))
+      },
+
+      setActiveTheme: (themeId: string | null) => {
+        set({ activeThemeId: themeId, error: null })
+      },
+
+      archiveTheme: (themeId: string) => {
+        set((state) => ({
+          themes: state.themes.map((t) =>
+            t.id === themeId
+              ? { ...t, status: 'archived' as ThemeStatus, updatedAt: Date.now() }
+              : t
+          ),
+        }))
+      },
+
+      deleteTheme: (themeId: string) => {
+        set((state) => {
+          const newThemes = state.themes.filter((t) => t.id !== themeId)
+          const newSessions = state.sessions.filter((s) => s.themeId !== themeId)
+          const newActiveThemeId =
+            state.activeThemeId === themeId
+              ? newThemes.find((t) => t.status === 'active')?.id || null
+              : state.activeThemeId
+
+          return {
+            themes: newThemes,
+            sessions: newSessions,
+            activeThemeId: newActiveThemeId,
+            activeSessionId: state.activeSessionId && newSessions.some((s) => s.id === state.activeSessionId)
+              ? state.activeSessionId
+              : null,
+          }
+        })
+      },
+
+      setThemeDeadline: (themeId: string, deadline: number | undefined) => {
+        set((state) => ({
+          themes: state.themes.map((t) =>
+            t.id === themeId
+              ? { ...t, deadline, updatedAt: Date.now() }
+              : t
+          ),
+        }))
+      },
+
+      // === Session Management ===
+      createSession: (themeId?: string) => {
         const id = generateId()
+        const effectiveThemeId = themeId || get().activeThemeId
+
         const session: MusicLeagueSession = {
           id,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          phase: 'conversation',
+          phase: 'brainstorm',
+          themeId: effectiveThemeId || undefined,
+          title: `Session ${get().sessions.filter((s) => s.themeId === effectiveThemeId).length + 1}`,
           theme: null,
+          workingCandidates: [],
           candidates: [],
           finalists: [],
           rejectedSongs: [],
@@ -132,6 +326,20 @@ export const useMusicLeagueStore = create<MusicLeagueState>()(
         }))
 
         return id
+      },
+
+      createSessionForTheme: (themeId: string) => {
+        return get().createSession(themeId)
+      },
+
+      updateSessionTitle: (sessionId: string, title: string) => {
+        set((state) => ({
+          sessions: state.sessions.map((s) =>
+            s.id === sessionId
+              ? { ...s, title, updatedAt: Date.now() }
+              : s
+          ),
+        }))
       },
 
       resumeSession: (id) => {
@@ -161,6 +369,254 @@ export const useMusicLeagueStore = create<MusicLeagueState>()(
         })
       },
 
+      // === Tier Management ===
+      promoteSong: (themeId: string, song: Song, toTier: FunnelTier, reason?: string) => {
+        set((state) => ({
+          themes: state.themes.map((t) => {
+            if (t.id !== themeId) return t
+
+            // Find which tier the song is currently in
+            let fromTier: FunnelTier | 'working' = 'working'
+            if (t.candidates.some((s) => s.id === song.id)) fromTier = 'candidates'
+            else if (t.semifinalists.some((s) => s.id === song.id)) fromTier = 'semifinalists'
+            else if (t.finalists.some((s) => s.id === song.id)) fromTier = 'finalists'
+
+            // Check tier limits
+            const tierLimit = FUNNEL_TIER_LIMITS[toTier]
+            const currentTierSongs =
+              toTier === 'pick' ? (t.pick ? [t.pick] : []) :
+              toTier === 'finalists' ? t.finalists :
+              toTier === 'semifinalists' ? t.semifinalists :
+              t.candidates
+
+            if (currentTierSongs.length >= tierLimit) {
+              console.warn(`Cannot promote to ${toTier}: tier is full (${tierLimit})`)
+              return t
+            }
+
+            // Create updated song with promotion record
+            const promotedSong: Song = {
+              ...song,
+              currentTier: toTier,
+              promotionHistory: [
+                ...(song.promotionHistory || []),
+                { fromTier, toTier, reason, timestamp: Date.now() },
+              ],
+            }
+
+            // Remove from old tier
+            const newTheme = { ...t, updatedAt: Date.now() }
+            if (fromTier === 'candidates') {
+              newTheme.candidates = t.candidates.filter((s) => s.id !== song.id)
+            } else if (fromTier === 'semifinalists') {
+              newTheme.semifinalists = t.semifinalists.filter((s) => s.id !== song.id)
+            } else if (fromTier === 'finalists') {
+              newTheme.finalists = t.finalists.filter((s) => s.id !== song.id)
+            }
+
+            // Add to new tier
+            if (toTier === 'pick') {
+              newTheme.pick = promotedSong
+            } else if (toTier === 'finalists') {
+              newTheme.finalists = [...newTheme.finalists, promotedSong]
+            } else if (toTier === 'semifinalists') {
+              newTheme.semifinalists = [...newTheme.semifinalists, promotedSong]
+            } else {
+              newTheme.candidates = [...newTheme.candidates, promotedSong]
+            }
+
+            return newTheme
+          }),
+        }))
+      },
+
+      demoteSong: (themeId: string, song: Song, toTier: FunnelTier, reason?: string) => {
+        set((state) => ({
+          themes: state.themes.map((t) => {
+            if (t.id !== themeId) return t
+
+            // Find which tier the song is currently in
+            let fromTier: FunnelTier | 'working' = 'working'
+            if (t.pick?.id === song.id) fromTier = 'pick'
+            else if (t.finalists.some((s) => s.id === song.id)) fromTier = 'finalists'
+            else if (t.semifinalists.some((s) => s.id === song.id)) fromTier = 'semifinalists'
+            else if (t.candidates.some((s) => s.id === song.id)) fromTier = 'candidates'
+
+            // Create updated song with demotion record
+            const demotedSong: Song = {
+              ...song,
+              currentTier: toTier,
+              promotionHistory: [
+                ...(song.promotionHistory || []),
+                { fromTier, toTier, reason, timestamp: Date.now() },
+              ],
+            }
+
+            // Remove from old tier
+            const newTheme = { ...t, updatedAt: Date.now() }
+            if (fromTier === 'pick') {
+              newTheme.pick = null
+            } else if (fromTier === 'finalists') {
+              newTheme.finalists = t.finalists.filter((s) => s.id !== song.id)
+            } else if (fromTier === 'semifinalists') {
+              newTheme.semifinalists = t.semifinalists.filter((s) => s.id !== song.id)
+            } else if (fromTier === 'candidates') {
+              newTheme.candidates = t.candidates.filter((s) => s.id !== song.id)
+            }
+
+            // Add to new tier
+            if (toTier === 'finalists') {
+              newTheme.finalists = [...newTheme.finalists, demotedSong]
+            } else if (toTier === 'semifinalists') {
+              newTheme.semifinalists = [...newTheme.semifinalists, demotedSong]
+            } else {
+              newTheme.candidates = [...newTheme.candidates, demotedSong]
+            }
+
+            return newTheme
+          }),
+        }))
+      },
+
+      removeSongFromTier: (themeId: string, songId: string, tier: FunnelTier) => {
+        set((state) => ({
+          themes: state.themes.map((t) => {
+            if (t.id !== themeId) return t
+
+            const newTheme = { ...t, updatedAt: Date.now() }
+            if (tier === 'pick' && t.pick?.id === songId) {
+              newTheme.pick = null
+            } else if (tier === 'finalists') {
+              newTheme.finalists = t.finalists.filter((s) => s.id !== songId)
+            } else if (tier === 'semifinalists') {
+              newTheme.semifinalists = t.semifinalists.filter((s) => s.id !== songId)
+            } else if (tier === 'candidates') {
+              newTheme.candidates = t.candidates.filter((s) => s.id !== songId)
+            }
+
+            return newTheme
+          }),
+        }))
+      },
+
+      addCandidateToTheme: (themeId: string, song: Song) => {
+        set((state) => ({
+          themes: state.themes.map((t) => {
+            if (t.id !== themeId) return t
+
+            // Check limit
+            if (t.candidates.length >= FUNNEL_TIER_LIMITS.candidates) {
+              console.warn(`Cannot add candidate: tier is full (${FUNNEL_TIER_LIMITS.candidates})`)
+              return t
+            }
+
+            // Check for duplicates
+            if (t.candidates.some((s) =>
+              s.title.toLowerCase() === song.title.toLowerCase() &&
+              s.artist.toLowerCase() === song.artist.toLowerCase()
+            )) {
+              console.warn('Song already exists in candidates')
+              return t
+            }
+
+            const candidateSong: Song = {
+              ...song,
+              id: song.id || generateSongId(),
+              currentTier: 'candidates',
+              addedInSessionId: get().activeSessionId || undefined,
+            }
+
+            return {
+              ...t,
+              candidates: [...t.candidates, candidateSong],
+              updatedAt: Date.now(),
+            }
+          }),
+        }))
+      },
+
+      setThemePick: (themeId: string, song: Song | null) => {
+        set((state) => ({
+          themes: state.themes.map((t) =>
+            t.id === themeId
+              ? { ...t, pick: song, updatedAt: Date.now() }
+              : t
+          ),
+        }))
+      },
+
+      // === Song Metadata ===
+      updateSongInTheme: (themeId: string, songId: string, updates: Partial<Song>) => {
+        set((state) => ({
+          themes: state.themes.map((t) => {
+            if (t.id !== themeId) return t
+
+            const updateSong = (song: Song): Song =>
+              song.id === songId ? { ...song, ...updates } : song
+
+            return {
+              ...t,
+              pick: t.pick?.id === songId ? { ...t.pick, ...updates } : t.pick,
+              finalists: t.finalists.map(updateSong),
+              semifinalists: t.semifinalists.map(updateSong),
+              candidates: t.candidates.map(updateSong),
+              updatedAt: Date.now(),
+            }
+          }),
+        }))
+      },
+
+      reorderSongsInTier: (themeId: string, tier: FunnelTier, songIds: string[]) => {
+        set((state) => ({
+          themes: state.themes.map((t) => {
+            if (t.id !== themeId) return t
+
+            const reorderArray = (songs: Song[]): Song[] => {
+              const songMap = new Map(songs.map((s) => [s.id, s]))
+              const reordered: Song[] = []
+              songIds.forEach((id, index) => {
+                const song = songMap.get(id)
+                if (song) {
+                  reordered.push({ ...song, rank: index + 1 })
+                }
+              })
+              return reordered
+            }
+
+            const newTheme = { ...t, updatedAt: Date.now() }
+            if (tier === 'finalists') {
+              newTheme.finalists = reorderArray(t.finalists)
+            } else if (tier === 'semifinalists') {
+              newTheme.semifinalists = reorderArray(t.semifinalists)
+            } else if (tier === 'candidates') {
+              newTheme.candidates = reorderArray(t.candidates)
+            }
+
+            return newTheme
+          }),
+        }))
+      },
+
+      // === Playlist Sync ===
+      setThemePlaylist: (themeId: string, tier: FunnelTier, playlistId: string, playlistUrl: string) => {
+        set((state) => ({
+          themes: state.themes.map((t) =>
+            t.id === themeId
+              ? {
+                  ...t,
+                  spotifyPlaylist: {
+                    playlistId,
+                    playlistUrl,
+                    syncedTier: tier,
+                    lastSyncAt: Date.now(),
+                  },
+                  updatedAt: Date.now(),
+                }
+              : t
+          ),
+        }))
+      },
+
       setPhase: (phase) => {
         set((state) => ({
           sessions: state.sessions.map((s) =>
@@ -181,7 +637,7 @@ export const useMusicLeagueStore = create<MusicLeagueState>()(
         }))
       },
 
-      setCandidates: (songs) => {
+      setWorkingCandidates: (songs) => {
         // Assign IDs to songs that don't have them
         const songsWithIds = songs.map((song) => ({
           ...song,
@@ -191,21 +647,27 @@ export const useMusicLeagueStore = create<MusicLeagueState>()(
         set((state) => ({
           sessions: state.sessions.map((s) =>
             s.id === state.activeSessionId
-              ? { ...s, candidates: songsWithIds, updatedAt: Date.now() }
+              ? { ...s, workingCandidates: songsWithIds, candidates: songsWithIds, updatedAt: Date.now() }
               : s
           ),
         }))
+      },
+
+      setCandidates: (songs) => {
+        // Legacy alias - calls setWorkingCandidates
+        get().setWorkingCandidates(songs)
       },
 
       updateCandidate: (songId, updates) => {
         set((state) => ({
           sessions: state.sessions.map((s) => {
             if (s.id !== state.activeSessionId) return s
+            const updateSong = (song: Song) =>
+              song.id === songId ? { ...song, ...updates } : song
             return {
               ...s,
-              candidates: s.candidates.map((song) =>
-                song.id === songId ? { ...song, ...updates } : song
-              ),
+              workingCandidates: (s.workingCandidates || []).map(updateSong),
+              candidates: s.candidates.map(updateSong),
               updatedAt: Date.now(),
             }
           }),
@@ -216,11 +678,12 @@ export const useMusicLeagueStore = create<MusicLeagueState>()(
         set((state) => ({
           sessions: state.sessions.map((s) => {
             if (s.id !== state.activeSessionId) return s
+            const toggleSong = (song: Song) =>
+              song.id === songId ? { ...song, isFavorite: !song.isFavorite } : song
             return {
               ...s,
-              candidates: s.candidates.map((song) =>
-                song.id === songId ? { ...song, isFavorite: !song.isFavorite } : song
-              ),
+              workingCandidates: (s.workingCandidates || []).map(toggleSong),
+              candidates: s.candidates.map(toggleSong),
               updatedAt: Date.now(),
             }
           }),
@@ -511,15 +974,169 @@ export const useMusicLeagueStore = create<MusicLeagueState>()(
       setStrategistModel: (model) => {
         set({ strategistModel: model })
       },
+
+      // === Export ===
+      exportFunnelSummary: (themeId: string) => {
+        const theme = get().themes.find((t) => t.id === themeId)
+        if (!theme) return 'Theme not found'
+
+        const lines: string[] = [
+          `# ${theme.title}`,
+          `Theme: ${theme.rawTheme}`,
+          '',
+        ]
+
+        if (theme.interpretation) {
+          lines.push(`Interpretation: ${theme.interpretation}`, '')
+        }
+
+        if (theme.pick) {
+          lines.push('## 🏆 PICK')
+          lines.push(`- "${theme.pick.title}" by ${theme.pick.artist}`)
+          lines.push('')
+        }
+
+        if (theme.finalists.length > 0) {
+          lines.push(`## Finalists (${theme.finalists.length}/${FUNNEL_TIER_LIMITS.finalists})`)
+          theme.finalists.forEach((s, i) => {
+            lines.push(`${i + 1}. "${s.title}" by ${s.artist}`)
+          })
+          lines.push('')
+        }
+
+        if (theme.semifinalists.length > 0) {
+          lines.push(`## Semifinalists (${theme.semifinalists.length}/${FUNNEL_TIER_LIMITS.semifinalists})`)
+          theme.semifinalists.forEach((s, i) => {
+            lines.push(`${i + 1}. "${s.title}" by ${s.artist}`)
+          })
+          lines.push('')
+        }
+
+        if (theme.candidates.length > 0) {
+          lines.push(`## Candidates (${theme.candidates.length}/${FUNNEL_TIER_LIMITS.candidates})`)
+          theme.candidates.forEach((s, i) => {
+            lines.push(`${i + 1}. "${s.title}" by ${s.artist}`)
+          })
+          lines.push('')
+        }
+
+        if (theme.deadline) {
+          const deadline = new Date(theme.deadline)
+          lines.push(`Deadline: ${deadline.toLocaleDateString()} ${deadline.toLocaleTimeString()}`)
+        }
+
+        return lines.join('\n')
+      },
     }),
     {
       name: STORAGE_KEYS.MUSIC_LEAGUE || 'mashb0ard-music-league',
+      version: 2,
       partialize: (state) => ({
+        themes: state.themes,
+        activeThemeId: state.activeThemeId,
         sessions: state.sessions,
         activeSessionId: state.activeSessionId,
         userProfile: state.userProfile,
         strategistModel: state.strategistModel,
+        _version: state._version,
       }),
+      migrate: (persistedState: unknown, version: number) => {
+        const state = persistedState as Record<string, unknown>
+
+        // Migration from version 1 (or unversioned) to version 2
+        if (version < 2) {
+          console.log('[MusicLeague] Migrating from v1 to v2...')
+
+          const oldSessions = (state.sessions || []) as MusicLeagueSession[]
+          const themes: MusicLeagueTheme[] = []
+          const migratedSessions: MusicLeagueSession[] = []
+
+          // Group sessions by theme text
+          const themeGroups = new Map<string, MusicLeagueSession[]>()
+
+          for (const session of oldSessions) {
+            const themeKey = session.theme?.rawTheme || 'Unknown Theme'
+            if (!themeGroups.has(themeKey)) {
+              themeGroups.set(themeKey, [])
+            }
+            themeGroups.get(themeKey)!.push(session)
+          }
+
+          // Create themes from groups
+          for (const [rawTheme, sessions] of themeGroups) {
+            const themeId = generateThemeId()
+            const oldestSession = sessions.reduce((a, b) =>
+              a.createdAt < b.createdAt ? a : b
+            )
+
+            // Collect all candidates and finalists from sessions
+            const allCandidates: Song[] = []
+            const allFinalists: Song[] = []
+
+            for (const session of sessions) {
+              for (const song of session.candidates || []) {
+                if (!allCandidates.some((s) =>
+                  s.title.toLowerCase() === song.title.toLowerCase() &&
+                  s.artist.toLowerCase() === song.artist.toLowerCase()
+                )) {
+                  allCandidates.push({ ...song, currentTier: 'candidates' })
+                }
+              }
+              for (const song of session.finalists || []) {
+                if (!allFinalists.some((s) =>
+                  s.title.toLowerCase() === song.title.toLowerCase() &&
+                  s.artist.toLowerCase() === song.artist.toLowerCase()
+                )) {
+                  allFinalists.push({ ...song, currentTier: 'finalists' })
+                }
+              }
+            }
+
+            // Create theme
+            const theme: MusicLeagueTheme = {
+              id: themeId,
+              rawTheme,
+              interpretation: oldestSession.theme?.interpretation,
+              strategy: oldestSession.theme?.strategy,
+              title: generateThemeTitle(rawTheme),
+              createdAt: oldestSession.createdAt,
+              updatedAt: Date.now(),
+              pick: null,
+              finalists: allFinalists.slice(0, FUNNEL_TIER_LIMITS.finalists),
+              semifinalists: [],
+              candidates: allCandidates.slice(0, FUNNEL_TIER_LIMITS.candidates),
+              status: 'active',
+            }
+            themes.push(theme)
+
+            // Migrate sessions to reference theme
+            for (const session of sessions) {
+              const idx = sessions.indexOf(session)
+              migratedSessions.push({
+                ...session,
+                themeId,
+                title: `Session ${idx + 1}`,
+                workingCandidates: session.candidates || [],
+                phase: session.phase === 'conversation' ? 'brainstorm' :
+                       session.phase === 'finalists' ? 'decide' :
+                       session.phase,
+              })
+            }
+          }
+
+          console.log(`[MusicLeague] Migrated ${themes.length} themes, ${migratedSessions.length} sessions`)
+
+          return {
+            ...state,
+            themes,
+            activeThemeId: themes[0]?.id || null,
+            sessions: migratedSessions,
+            _version: 2,
+          }
+        }
+
+        return state
+      },
     }
   )
 )
@@ -576,6 +1193,42 @@ export function formatFinalistsForPrompt(finalists: Song[]): string {
     .join('\n')
 }
 
+// Helper: Format funnel state for AI context (NEW)
+export function formatFunnelForPrompt(theme: MusicLeagueTheme): string {
+  const parts: string[] = []
+
+  if (theme.pick) {
+    parts.push(`🏆 PICK: "${theme.pick.title}" by ${theme.pick.artist}`)
+  }
+
+  if (theme.finalists.length > 0) {
+    parts.push(`\n📋 FINALISTS (${theme.finalists.length}/${FUNNEL_TIER_LIMITS.finalists}):`)
+    theme.finalists.forEach((s, i) => {
+      parts.push(`  ${i + 1}. "${s.title}" by ${s.artist}`)
+    })
+  }
+
+  if (theme.semifinalists.length > 0) {
+    parts.push(`\n📝 SEMIFINALISTS (${theme.semifinalists.length}/${FUNNEL_TIER_LIMITS.semifinalists}):`)
+    theme.semifinalists.forEach((s, i) => {
+      parts.push(`  ${i + 1}. "${s.title}" by ${s.artist}`)
+    })
+  }
+
+  if (theme.candidates.length > 0) {
+    parts.push(`\n🎵 CANDIDATES (${theme.candidates.length}/${FUNNEL_TIER_LIMITS.candidates}):`)
+    theme.candidates.forEach((s, i) => {
+      parts.push(`  ${i + 1}. "${s.title}" by ${s.artist}`)
+    })
+  }
+
+  if (parts.length === 0) {
+    return 'Empty funnel - no songs added yet.'
+  }
+
+  return parts.join('\n')
+}
+
 // Get system prompt for conversation mode
 export function getConversationPrompt(
   session: MusicLeagueSession,
@@ -610,6 +1263,86 @@ export function getConversationPrompt(
   // Add long-term preferences from user profile
   if (userProfile?.longTermPreferences && userProfile.longTermPreferences.length > 0) {
     contextParts.push(`\n=== LONG-TERM PREFERENCES (general preferences, prioritize these) ===\n${formatLongTermPreferencesForPrompt(userProfile.longTermPreferences)}`)
+  }
+
+  if (session.playlistCreated) {
+    contextParts.push(`\n=== PLAYLIST CREATED ===\nPlatform: ${session.playlistCreated.platform}\nURL: ${session.playlistCreated.playlistUrl}\nNOTE: Assume the player has listened to these songs. Ask follow-up questions about what they heard.`)
+  }
+
+  if (userProfile) {
+    const profileStr = [
+      `\n=== PLAYER PROFILE (${Math.round(userProfile.weight * 100)}% confidence) ===`,
+      `Summary: ${userProfile.summary}`,
+      `Genres: ${userProfile.categories.genres.join(', ') || '—'}`,
+      `Eras: ${userProfile.categories.eras.join(', ') || '—'}`,
+      `Moods: ${userProfile.categories.moods.join(', ') || '—'}`,
+      `Risk Appetite: ${userProfile.categories.riskAppetite.join(', ') || '—'}`,
+      `Dislikes: ${userProfile.categories.dislikes.join(', ') || '—'}`,
+    ].join('\n')
+    contextParts.push(profileStr)
+  }
+
+  if (contextParts.length > 0) {
+    prompt += '\n\n' + contextParts.join('\n')
+  }
+
+  return prompt
+}
+
+// Get system prompt with theme funnel context (NEW)
+export function getConversationPromptWithTheme(
+  session: MusicLeagueSession,
+  theme: MusicLeagueTheme | undefined,
+  aggregatedRejectedSongs: RejectedSong[],
+  aggregatedPreferences: SessionPreference[],
+  userProfile: MusicLeagueUserProfile | null
+): string {
+  let prompt = MUSIC_LEAGUE_PROMPTS.conversation_system
+
+  const contextParts: string[] = []
+
+  // Theme context
+  if (theme) {
+    contextParts.push(`=== CURRENT THEME ===\nTitle: ${theme.title}\nPrompt: ${theme.rawTheme}`)
+    if (theme.interpretation) {
+      contextParts.push(`Interpretation: ${theme.interpretation}`)
+    }
+    if (theme.deadline) {
+      const deadline = new Date(theme.deadline)
+      const now = new Date()
+      const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      contextParts.push(`Deadline: ${deadline.toLocaleDateString()} (${daysLeft} day${daysLeft === 1 ? '' : 's'} left)`)
+    }
+
+    // Funnel state
+    contextParts.push(`\n=== FUNNEL STATE ===\n${formatFunnelForPrompt(theme)}`)
+  } else if (session.theme) {
+    // Fallback to session theme
+    contextParts.push(`=== CURRENT THEME ===\n${session.theme.rawTheme}`)
+    if (session.theme.interpretation) {
+      contextParts.push(`Interpretation: ${session.theme.interpretation}`)
+    }
+  }
+
+  // Working candidates (session-specific)
+  const workingCandidates = session.workingCandidates || session.candidates || []
+  if (workingCandidates.length > 0) {
+    contextParts.push(`\n=== SESSION WORKING SET (${workingCandidates.length}) ===\n${formatCandidatesForPrompt(workingCandidates)}`)
+  }
+
+  // Aggregated rejected songs from all theme sessions
+  if (aggregatedRejectedSongs.length > 0) {
+    contextParts.push(`\n=== REJECTED SONGS (DO NOT RE-PROPOSE) ===\n${formatRejectedSongsForPrompt(aggregatedRejectedSongs)}`)
+  }
+
+  // Aggregated preferences from all theme sessions
+  if (aggregatedPreferences.length > 0) {
+    contextParts.push(`\n=== THEME PREFERENCES (from all sessions) ===\n${formatSessionPreferencesForPrompt(aggregatedPreferences)}`)
+  }
+
+  // Long-term preferences from user profile
+  if (userProfile?.longTermPreferences && userProfile.longTermPreferences.length > 0) {
+    contextParts.push(`\n=== LONG-TERM PREFERENCES ===\n${formatLongTermPreferencesForPrompt(userProfile.longTermPreferences)}`)
   }
 
   if (session.playlistCreated) {

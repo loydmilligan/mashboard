@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'https://mashb0ard.mattmariani.com',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5177',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

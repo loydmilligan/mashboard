@@ -284,6 +284,208 @@ class SpotifyService {
 
     return { configured: true }
   }
+
+  // === NEW: Playlist Sync Methods ===
+
+  // Get tracks currently in a playlist
+  async getPlaylistTracks(playlistId: string): Promise<Song[]> {
+    if (!this.isConfigured) {
+      throw new Error('Spotify not configured')
+    }
+
+    const token = await this.getAccessToken()
+    const songs: Song[] = []
+    let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`
+
+    while (nextUrl) {
+      const response = await fetch(nextUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to get playlist tracks: ${error}`)
+      }
+
+      const data = await response.json()
+      for (const item of data.items || []) {
+        const track = item.track
+        if (track) {
+          songs.push({
+            id: track.id,
+            title: track.name,
+            artist: track.artists.map((a: { name: string }) => a.name).join(', '),
+            album: track.album?.name,
+            year: track.album?.release_date ? parseInt(track.album.release_date.split('-')[0]) : undefined,
+            spotifyTrackId: track.id,
+            spotifyUri: track.uri,
+            reason: '',
+          })
+        }
+      }
+
+      nextUrl = data.next
+    }
+
+    return songs
+  }
+
+  // Add tracks to a playlist
+  async addTracksToPlaylist(playlistId: string, songs: Song[]): Promise<void> {
+    if (!this.isConfigured || songs.length === 0) return
+
+    const token = await this.getAccessToken()
+
+    // Collect URIs
+    const uris: string[] = []
+    for (const song of songs) {
+      let uri = song.spotifyUri
+      if (!uri) {
+        const result = await this.searchTrack(song)
+        uri = result?.uri
+      }
+      if (uri) {
+        uris.push(uri)
+      }
+      // Rate limit
+      await new Promise((r) => setTimeout(r, 100))
+    }
+
+    if (uris.length === 0) return
+
+    // Add in batches of 100
+    for (let i = 0; i < uris.length; i += 100) {
+      const batch = uris.slice(i, i + 100)
+      const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uris: batch }),
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to add tracks: ${error}`)
+      }
+    }
+  }
+
+  // Remove tracks from a playlist
+  async removeTracksFromPlaylist(playlistId: string, songs: Song[]): Promise<void> {
+    if (!this.isConfigured || songs.length === 0) return
+
+    const token = await this.getAccessToken()
+
+    // Collect URIs
+    const uris: string[] = []
+    for (const song of songs) {
+      if (song.spotifyUri) {
+        uris.push(song.spotifyUri)
+      }
+    }
+
+    if (uris.length === 0) return
+
+    // Remove in batches of 100
+    for (let i = 0; i < uris.length; i += 100) {
+      const batch = uris.slice(i, i + 100)
+      const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tracks: batch.map((uri) => ({ uri })),
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to remove tracks: ${error}`)
+      }
+    }
+  }
+
+  // Smart sync: Update playlist to match desired songs
+  async syncPlaylistWithSongs(playlistId: string, desiredSongs: Song[]): Promise<{ added: number; removed: number }> {
+    if (!this.isConfigured) {
+      throw new Error('Spotify not configured')
+    }
+
+    // Get current playlist tracks
+    const currentTracks = await this.getPlaylistTracks(playlistId)
+
+    // Find songs to add (in desired but not in current)
+    const toAdd: Song[] = []
+    for (const song of desiredSongs) {
+      const exists = currentTracks.some(
+        (t) =>
+          t.spotifyUri === song.spotifyUri ||
+          (t.title.toLowerCase() === song.title.toLowerCase() &&
+            t.artist.toLowerCase() === song.artist.toLowerCase())
+      )
+      if (!exists) {
+        toAdd.push(song)
+      }
+    }
+
+    // Find songs to remove (in current but not in desired)
+    const toRemove: Song[] = []
+    for (const track of currentTracks) {
+      const wanted = desiredSongs.some(
+        (s) =>
+          s.spotifyUri === track.spotifyUri ||
+          (s.title.toLowerCase() === track.title.toLowerCase() &&
+            s.artist.toLowerCase() === track.artist.toLowerCase())
+      )
+      if (!wanted) {
+        toRemove.push(track)
+      }
+    }
+
+    // Perform sync
+    if (toRemove.length > 0) {
+      await this.removeTracksFromPlaylist(playlistId, toRemove)
+    }
+    if (toAdd.length > 0) {
+      await this.addTracksToPlaylist(playlistId, toAdd)
+    }
+
+    console.log(`[Spotify] Sync complete: added ${toAdd.length}, removed ${toRemove.length}`)
+
+    return { added: toAdd.length, removed: toRemove.length }
+  }
+
+  // Create or sync a playlist with songs from a specific tier
+  async createOrSyncTierPlaylist(
+    title: string,
+    description: string,
+    songs: Song[],
+    existingPlaylistId?: string
+  ): Promise<{ playlistId: string; playlistUrl: string; added: number; removed: number }> {
+    if (existingPlaylistId) {
+      // Sync existing playlist
+      const result = await this.syncPlaylistWithSongs(existingPlaylistId, songs)
+      return {
+        playlistId: existingPlaylistId,
+        playlistUrl: `https://open.spotify.com/playlist/${existingPlaylistId}`,
+        ...result,
+      }
+    } else {
+      // Create new playlist
+      const result = await this.createPlaylist(title, description, songs)
+      return {
+        ...result,
+        added: songs.length,
+        removed: 0,
+      }
+    }
+  }
 }
 
 export const spotifyService = new SpotifyService()
