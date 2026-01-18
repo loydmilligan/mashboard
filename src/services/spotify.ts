@@ -7,6 +7,39 @@ interface SpotifySearchResult {
   name: string
   artists: string[]
   uri: string
+  spotifyUrl: string
+}
+
+interface SonglinkResponse {
+  entityUniqueId: string
+  userCountry: string
+  pageUrl: string
+  linksByPlatform: {
+    youtube?: {
+      url: string
+      entityUniqueId: string
+    }
+    youtubeMusic?: {
+      url: string
+      entityUniqueId: string
+    }
+    spotify?: {
+      url: string
+      entityUniqueId: string
+    }
+    appleMusic?: {
+      url: string
+      entityUniqueId: string
+    }
+  }
+}
+
+interface EnrichedSongLinks {
+  spotifyTrackId?: string
+  spotifyUri?: string
+  spotifyUrl?: string
+  youtubeVideoId?: string
+  youtubeUrl?: string
 }
 
 interface SpotifyAccessToken {
@@ -137,10 +170,86 @@ class SpotifyService {
       name: track.name,
       artists: track.artists.map((a: { name: string }) => a.name),
       uri: track.uri,
+      spotifyUrl: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
     }
   }
 
-  // Search for track IDs for all songs
+  // Use Songlink/Odesli API to get links for other platforms (YouTube, Apple Music, etc.)
+  async getSonglinkData(spotifyUrl: string): Promise<SonglinkResponse | null> {
+    try {
+      const encodedUrl = encodeURIComponent(spotifyUrl)
+      const response = await fetch(
+        `https://api.song.link/v1-alpha.1/links?url=${encodedUrl}`,
+        {
+          headers: {
+            'Accept': 'application/json',
+          },
+        }
+      )
+
+      if (!response.ok) {
+        console.warn('[Songlink] API request failed:', response.status)
+        return null
+      }
+
+      return await response.json()
+    } catch (error) {
+      console.error('[Songlink] Error fetching links:', error)
+      return null
+    }
+  }
+
+  // Extract YouTube video ID from a YouTube URL
+  private extractYouTubeVideoId(url: string): string | undefined {
+    // Handle various YouTube URL formats
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+      /music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+    ]
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern)
+      if (match) return match[1]
+    }
+
+    return undefined
+  }
+
+  // Get all platform links for a song (Spotify search + Songlink for YouTube)
+  async getEnrichedLinks(song: Song): Promise<EnrichedSongLinks> {
+    const result: EnrichedSongLinks = {}
+
+    // First, search Spotify to get track info
+    const spotifyResult = await this.searchTrack(song)
+
+    if (spotifyResult) {
+      result.spotifyTrackId = spotifyResult.trackId
+      result.spotifyUri = spotifyResult.uri
+      result.spotifyUrl = spotifyResult.spotifyUrl
+
+      // Now use Songlink to get YouTube link
+      const songlinkData = await this.getSonglinkData(spotifyResult.spotifyUrl)
+
+      if (songlinkData?.linksByPlatform) {
+        // Prefer YouTube Music, fall back to regular YouTube
+        const ytMusic = songlinkData.linksByPlatform.youtubeMusic
+        const yt = songlinkData.linksByPlatform.youtube
+
+        if (ytMusic?.url) {
+          result.youtubeUrl = ytMusic.url
+          result.youtubeVideoId = this.extractYouTubeVideoId(ytMusic.url)
+        } else if (yt?.url) {
+          result.youtubeUrl = yt.url
+          result.youtubeVideoId = this.extractYouTubeVideoId(yt.url)
+        }
+      }
+    }
+
+    return result
+  }
+
+  // Search for track IDs for all songs and enrich with YouTube links via Songlink
   async enrichSongsWithTrackIds(songs: Song[]): Promise<Song[]> {
     if (!this.isConfigured) {
       // If not configured, just return songs as-is
@@ -151,22 +260,28 @@ class SpotifyService {
 
     for (const song of songs) {
       try {
-        const result = await this.searchTrack(song)
-        if (result) {
+        // Use the new getEnrichedLinks which gets both Spotify and YouTube
+        const links = await this.getEnrichedLinks(song)
+
+        if (links.spotifyTrackId) {
           enrichedSongs.push({
             ...song,
-            spotifyTrackId: result.trackId,
-            spotifyUri: result.uri,
+            spotifyTrackId: links.spotifyTrackId,
+            spotifyUri: links.spotifyUri,
+            youtubeVideoId: links.youtubeVideoId,
+            youtubeUrl: links.youtubeUrl,
           })
+          console.log(`[Spotify] Enriched "${song.title}": Spotify=${links.spotifyTrackId}, YouTube=${links.youtubeVideoId || 'not found'}`)
         } else {
           enrichedSongs.push(song)
+          console.log(`[Spotify] No match found for "${song.title}"`)
         }
       } catch (error) {
-        console.error(`Failed to search for ${song.title}:`, error)
+        console.error(`Failed to enrich ${song.title}:`, error)
         enrichedSongs.push(song)
       }
-      // Rate limit - 100ms between requests
-      await new Promise((r) => setTimeout(r, 100))
+      // Rate limit - 200ms between requests (Songlink adds extra API call)
+      await new Promise((r) => setTimeout(r, 200))
     }
 
     return enrichedSongs

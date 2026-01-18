@@ -235,7 +235,7 @@ export function MusicLeagueStrategist(): JSX.Element {
       if (parsed) {
         // Update working candidates from response
         if (parsed.candidates && parsed.candidates.length > 0) {
-          const newCandidates: Song[] = parsed.candidates.map((c, idx) => ({
+          let newCandidates: Song[] = parsed.candidates.map((c, idx) => ({
             id: `song-${Date.now()}-${idx}`,
             title: c.title,
             artist: c.artist,
@@ -246,6 +246,14 @@ export function MusicLeagueStrategist(): JSX.Element {
             question: c.question,
             addedInSessionId: session.id,
           }))
+
+          // Enrich candidates with Spotify track IDs and YouTube links via Songlink
+          try {
+            newCandidates = await spotifyService.enrichSongsWithTrackIds(newCandidates)
+          } catch (enrichError) {
+            console.warn('Failed to enrich songs with platform links:', enrichError)
+          }
+
           setWorkingCandidates(newCandidates)
         }
 
